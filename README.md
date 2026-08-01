@@ -30,7 +30,7 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 
 ## Download
 
-Grab the latest **Agent Widget.dmg** from [Releases](https://github.com/mowhammadrezaa/agent-widget/releases) (or build one locally with `npm run dist` — see below).
+Grab the latest **Agent Widget.dmg** from [Releases](https://github.com/mowhammadrezaa/agent-widget/releases) (built automatically on every push to `master`, or run `npm run dist` locally).
 
 1. Open the DMG and drag **Agent Widget** into Applications
 2. Launch it from Applications / Spotlight (`Agent Widget`)
