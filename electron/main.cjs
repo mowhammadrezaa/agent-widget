@@ -13,6 +13,7 @@ const fs = require("fs");
 const os = require("os");
 const { execSync } = require("child_process");
 const pty = require("node-pty");
+const startup = require("../scripts/startup-lib.cjs");
 
 // Must be set before ready — helps macOS punch true per-pixel transparency.
 app.commandLine.appendSwitch("enable-transparent-visuals");
@@ -63,7 +64,6 @@ let ptyProcess = null;
 let ptyDataDisposable = null;
 let ptyExitDisposable = null;
 let expanded = false;
-let pinned = false;
 let alwaysOnTop = true;
 let workspace = process.env.HOME || os.homedir();
 let agentId = "cursor";
@@ -463,17 +463,13 @@ function createWindow() {
   win.webContents.on("before-input-event", (event, input) => {
     if (input.type === "keyDown" && input.key === "Escape" && expanded) {
       event.preventDefault();
-      requestCollapse({ force: true });
+      requestCollapse();
     }
   });
 }
 
-function requestCollapse({ force = false } = {}) {
+function requestCollapse() {
   if (!expanded) return;
-  if (pinned && !force) return;
-  if (pinned) {
-    pinned = false;
-  }
   setExpanded(false);
 }
 
@@ -495,6 +491,7 @@ function setAlwaysOnTopEnabled(next) {
     armPillHits();
   }
   saveConfig();
+  rebuildTrayMenu();
   sendState();
 }
 
@@ -503,8 +500,8 @@ function sendState() {
   const spec = currentAgent();
   win.webContents.send("widget:state", {
     expanded,
-    pinned,
     alwaysOnTop,
+    openAtLogin: startup.isOpenAtLogin(),
     workspace,
     agentId,
     agentLabel: spec.label,
@@ -514,6 +511,21 @@ function sendState() {
     agents: listAgents(),
     running: Boolean(ptyProcess),
   });
+}
+
+function setOpenAtLoginEnabled(next) {
+  try {
+    startup.setOpenAtLogin(Boolean(next));
+  } catch (err) {
+    const { dialog } = require("electron");
+    dialog.showErrorBox(
+      "Could not update login item",
+      String(err?.message || err),
+    );
+  }
+  rebuildTrayMenu();
+  sendState();
+  return startup.isOpenAtLogin();
 }
 
 function setExpanded(next) {
@@ -543,11 +555,6 @@ function setExpanded(next) {
     applyMousePassthrough();
     sendState();
   }
-}
-
-function setPinned(next) {
-  pinned = Boolean(next);
-  sendState();
 }
 
 function disposePtyListeners() {
@@ -676,14 +683,9 @@ function restartPty() {
   ensurePty();
 }
 
-function createTray() {
-  const pngBase64 =
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPUlEQVQ4T2NkYGD4z0ABYBzVMKoBBgYGBob/UAaTAcXG/xkwACaGmYGBgYERrysYKTUAph/FYFQD0DYAALq/AxG1QvK0AAAAAElFTkSuQmCC";
-  const image = nativeImage.createFromDataURL(`data:image/png;base64,${pngBase64}`);
-  image.setTemplateImage(true);
-
-  tray = new Tray(image);
-  tray.setToolTip("Cursor Agent Widget");
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const openAtLogin = startup.isOpenAtLogin();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -696,38 +698,22 @@ function createTray() {
         },
       },
       {
-        label: alwaysOnTop ? "Disable Always on Top" : "Enable Always on Top",
-        click: () => setAlwaysOnTopEnabled(!alwaysOnTop),
+        label: "Always on Top",
+        type: "checkbox",
+        checked: alwaysOnTop,
+        click: (item) => setAlwaysOnTopEnabled(item.checked),
+      },
+      {
+        label: "Open at Login",
+        type: "checkbox",
+        checked: openAtLogin,
+        click: (item) => setOpenAtLoginEnabled(item.checked),
       },
       {
         label: "Collapse",
         click: () => setExpanded(false),
       },
       { type: "separator" },
-      {
-        label: "Install Login + Shortcut App",
-        click: () => {
-          try {
-            execSync("node scripts/install-startup.cjs", {
-              cwd: path.join(__dirname, ".."),
-              stdio: "ignore",
-            });
-            const { dialog } = require("electron");
-            dialog.showMessageBox(win || undefined, {
-              type: "info",
-              title: "Startup installed",
-              message: "Agent Widget will open at login.",
-              detail:
-                "A ~/Applications/Agent Widget.app was also created.\n\n" +
-                "To launch with a keyboard shortcut after quitting:\n" +
-                "Shortcuts app → Open App → Agent Widget → Add Keyboard Shortcut.",
-            });
-          } catch (err) {
-            const { dialog } = require("electron");
-            dialog.showErrorBox("Startup install failed", String(err?.message || err));
-          }
-        },
-      },
       {
         label: "Restart Agent",
         click: () => restartPty(),
@@ -739,6 +725,18 @@ function createTray() {
       },
     ]),
   );
+}
+
+function createTray() {
+  if (tray) return;
+  const pngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPUlEQVQ4T2NkYGD4z0ABYBzVMKoBBgYGBob/UAaTAcXG/xkwACaGmYGBgYERrysYKTUAph/FYRQD0DYAALq/AxG1QvK0AAAAAElFTkSuQmCC";
+  const image = nativeImage.createFromDataURL(`data:image/png;base64,${pngBase64}`);
+  image.setTemplateImage(true);
+
+  tray = new Tray(image);
+  tray.setToolTip("Cursor Agent Widget");
+  rebuildTrayMenu();
 
   tray.on("click", () => {
     if (!win) createWindow();
@@ -749,11 +747,10 @@ function createTray() {
 
 function registerIpc() {
   ipcMain.on("widget:expand", () => setExpanded(true));
-  ipcMain.on("widget:collapse", (_e, opts) => {
-    requestCollapse({ force: Boolean(opts?.force) });
+  ipcMain.on("widget:collapse", () => {
+    requestCollapse();
   });
   ipcMain.on("widget:toggle", () => setExpanded(!expanded));
-  ipcMain.on("widget:pin", (_e, value) => setPinned(value));
   ipcMain.on("widget:restart", () => restartPty());
   ipcMain.on("widget:quit", () => {
     app.isQuitting = true;
@@ -786,16 +783,7 @@ function registerIpc() {
     menu.popup({ window: win });
   });
   ipcMain.on("widget:set-always-on-top", (_e, value) => setAlwaysOnTopEnabled(value));
-  ipcMain.on("widget:install-startup", () => {
-    try {
-      execSync("node scripts/install-startup.cjs", {
-        cwd: path.join(__dirname, ".."),
-        stdio: "ignore",
-      });
-    } catch {
-      // renderer can still tell user to run npm run install-startup
-    }
-  });
+  ipcMain.handle("widget:set-open-at-login", (_e, value) => setOpenAtLoginEnabled(value));
   ipcMain.on("widget:set-ignore-mouse", (_e, ignore) => {
     if (!win || win.isDestroyed() || expanded) return;
     if (!alwaysOnTop) {
@@ -824,8 +812,8 @@ function registerIpc() {
     const spec = currentAgent();
     return {
       expanded,
-      pinned,
       alwaysOnTop,
+      openAtLogin: startup.isOpenAtLogin(),
       workspace,
       agentId,
       agentLabel: spec.label,

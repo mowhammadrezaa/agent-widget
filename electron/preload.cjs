@@ -9,10 +9,10 @@ function subscribe(channel, cb) {
 
 contextBridge.exposeInMainWorld("widget", {
   expand: () => ipcRenderer.send("widget:expand"),
-  collapse: (opts) => ipcRenderer.send("widget:collapse", opts || {}),
+  collapse: () => ipcRenderer.send("widget:collapse"),
   toggle: () => ipcRenderer.send("widget:toggle"),
-  pin: (value) => ipcRenderer.send("widget:pin", value),
   setAlwaysOnTop: (value) => ipcRenderer.send("widget:set-always-on-top", value),
+  setOpenAtLogin: (value) => ipcRenderer.invoke("widget:set-open-at-login", value),
   restart: () => ipcRenderer.send("widget:restart"),
   setIgnoreMouse: (ignore) => ipcRenderer.send("widget:set-ignore-mouse", ignore),
   moveBy: (dx, dy) => ipcRenderer.send("widget:move-by", { dx, dy }),

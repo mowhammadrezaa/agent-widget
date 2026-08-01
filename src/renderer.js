@@ -15,8 +15,8 @@ const btnAgentSave = document.getElementById("btn-agent-save");
 const btnAgentCancel = document.getElementById("btn-agent-cancel");
 const hintCommand = document.getElementById("hint-command");
 const pillTitle = document.querySelector(".pill-title");
-const btnPin = document.getElementById("btn-pin");
 const btnTop = document.getElementById("btn-top");
+const btnLogin = document.getElementById("btn-login");
 const btnCollapse = document.getElementById("btn-collapse");
 const btnQuit = document.getElementById("btn-quit");
 const btnRestart = document.getElementById("btn-restart");
@@ -27,8 +27,8 @@ let term = null;
 let fitAddon = null;
 let resizeObserver = null;
 let leaveTimer = null;
-let pinned = false;
 let alwaysOnTop = true;
+let openAtLogin = false;
 let expanded = false;
 let ignoreMouse = true;
 let disposedData = null;
@@ -161,12 +161,12 @@ function ensureTerminal() {
 }
 
 function applyState(state) {
-  pinned = Boolean(state.pinned);
   alwaysOnTop = state.alwaysOnTop !== false;
-  btnPin.setAttribute("aria-pressed", pinned ? "true" : "false");
-  btnPin.textContent = pinned ? "Pinned" : "Pin";
+  openAtLogin = Boolean(state.openAtLogin);
   btnTop.setAttribute("aria-pressed", alwaysOnTop ? "true" : "false");
-  btnTop.textContent = alwaysOnTop ? "Top" : "Top off";
+  btnTop.dataset.tip = alwaysOnTop ? "Disable always on top" : "Keep above other windows";
+  btnLogin.setAttribute("aria-pressed", openAtLogin ? "true" : "false");
+  btnLogin.dataset.tip = openAtLogin ? "Disable open at login" : "Open at login";
   workspaceLabel.textContent = shortenHome(state.workspace);
 
   const label = state.agentLabel || "Cursor";
@@ -220,7 +220,7 @@ function releaseCollapseSoon(ms = 500) {
 
 function collapseNow() {
   clearTimeout(leaveTimer);
-  if (suppressCollapse || pinned || !expanded) return;
+  if (suppressCollapse || !expanded) return;
   if (!agentAdd.hidden) return;
   const active = document.activeElement;
   if (active === agentSelect || active?.closest?.(".actions") || active?.closest?.("#chrome") || active?.closest?.("#agent-add")) {
@@ -334,7 +334,6 @@ panel.addEventListener("mouseleave", (e) => {
 });
 
 btnCollapse.addEventListener("click", () => {
-  if (pinned) window.widget.pin(false);
   window.widget.collapse();
 });
 
@@ -342,13 +341,21 @@ btnQuit.addEventListener("click", () => {
   window.widget.quit();
 });
 
-btnPin.addEventListener("click", () => {
-  window.widget.pin(!pinned);
-});
-
 btnTop.addEventListener("click", () => {
   holdCollapse();
   window.widget.setAlwaysOnTop(!alwaysOnTop);
+  releaseCollapseSoon(400);
+});
+
+btnLogin.addEventListener("click", async () => {
+  holdCollapse();
+  try {
+    openAtLogin = await window.widget.setOpenAtLogin(!openAtLogin);
+    btnLogin.setAttribute("aria-pressed", openAtLogin ? "true" : "false");
+    btnLogin.dataset.tip = openAtLogin ? "Disable open at login" : "Open at login";
+  } catch {
+    // main process surfaces errors; keep previous UI until next state push
+  }
   releaseCollapseSoon(400);
 });
 
@@ -474,7 +481,7 @@ window.addEventListener("keydown", (e) => {
     }
     e.preventDefault();
     e.stopPropagation();
-    window.widget.collapse({ force: true });
+    window.widget.collapse();
   }
 }, true);
 

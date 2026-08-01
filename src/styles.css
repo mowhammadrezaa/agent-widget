@@ -222,7 +222,7 @@ body {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow: visible;
   opacity: 0;
   pointer-events: none;
   border: 1px solid var(--line);
@@ -297,6 +297,8 @@ body {
   gap: 12px;
   padding: 12px 12px 10px 14px;
   border-bottom: 1px solid var(--fog);
+  overflow: visible;
+  z-index: 5;
 }
 
 .brand {
@@ -330,12 +332,13 @@ body {
 .actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .agent-picker {
   display: inline-flex;
   align-items: center;
+  position: relative;
 }
 
 .agent-picker select {
@@ -347,15 +350,16 @@ body {
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
-  padding: 6px 28px 6px 10px;
+  padding: 6px 26px 6px 10px;
   border-radius: 999px;
   cursor: pointer;
+  max-width: 118px;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--muted) 50%),
     linear-gradient(135deg, var(--muted) 50%, transparent 50%);
   background-position:
-    calc(100% - 14px) 55%,
-    calc(100% - 10px) 55%;
+    calc(100% - 12px) 55%,
+    calc(100% - 8px) 55%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
@@ -383,38 +387,100 @@ body {
 
 .actions button {
   appearance: none;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 999px;
+  color: var(--muted);
+  border-radius: 10px;
   cursor: pointer;
+  flex: 0 0 auto;
   transition:
     background 140ms ease,
     border-color 140ms ease,
-    color 140ms ease;
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.actions button svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
 }
 
 .actions button:hover {
   background: rgba(183, 243, 92, 0.1);
   border-color: rgba(183, 243, 92, 0.28);
+  color: var(--text);
 }
 
-#btn-pin[aria-pressed="true"],
-#btn-top[aria-pressed="true"] {
+.actions button:active {
+  transform: translateY(0.5px);
+}
+
+#btn-top[aria-pressed="true"],
+#btn-login[aria-pressed="true"] {
   background: rgba(183, 243, 92, 0.16);
   border-color: rgba(183, 243, 92, 0.4);
   color: var(--accent);
 }
 
-#btn-collapse {
-  width: 28px;
-  padding-inline: 0;
-  font-size: 16px;
-  line-height: 1;
+/* Hover hints */
+.actions [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-2px);
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(8, 12, 11, 0.96);
+  border: 1px solid rgba(214, 232, 220, 0.16);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
+  z-index: 40;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.actions [data-tip]:hover::after,
+.actions [data-tip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+#btn-collapse[data-tip]::after,
+#btn-quit[data-tip]::after,
+#btn-login[data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+
+#btn-collapse[data-tip]:hover::after,
+#btn-collapse[data-tip]:focus-visible::after,
+#btn-quit[data-tip]:hover::after,
+#btn-quit[data-tip]:focus-visible::after,
+#btn-login[data-tip]:hover::after,
+#btn-login[data-tip]:focus-visible::after {
+  transform: translateY(0);
 }
 
 #terminal {
