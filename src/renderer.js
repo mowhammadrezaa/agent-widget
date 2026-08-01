@@ -292,20 +292,34 @@ pill.addEventListener("contextmenu", (e) => {
   window.widget.showPillMenu();
 });
 
-pillQuit.addEventListener("pointerdown", (e) => {
+function quitFromPill(e) {
   e.preventDefault();
   e.stopPropagation();
-});
-
-pillQuit.addEventListener("click", (e) => {
-  e.preventDefault();
-  e.stopPropagation();
+  dragging = false;
+  dragMoved = false;
+  dragLast = null;
+  pill.classList.remove("dragging");
   window.widget.quit();
+}
+
+// Quit on pointerdown — don't wait for click (preventDefault on down can
+ // suppress click), and geometry-based hit arming keeps the whole control live.
+pillQuit.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  quitFromPill(e);
 });
 
 document.addEventListener("mousemove", (e) => {
   if (expanded || dragging) return;
-  const overPill = e.target === pill || pill.contains(e.target);
+  const r = pill.getBoundingClientRect();
+  // Inflate slightly so the quit control's hit slop near the capsule edge
+  // still counts as "over the pill" for mouse passthrough arming.
+  const pad = 10;
+  const overPill =
+    e.clientX >= r.left - pad &&
+    e.clientX <= r.right + pad &&
+    e.clientY >= r.top - pad &&
+    e.clientY <= r.bottom + pad;
   const nextIgnore = !overPill;
   if (nextIgnore === ignoreMouse) return;
   ignoreMouse = nextIgnore;
