@@ -40,12 +40,19 @@
     "directories": {
       "output": "release"
     },
+    "compression": "maximum",
+    "afterPack": "./scripts/after-pack.cjs",
     "files": [
       "electron/**/*",
       "src/**/*",
-      "assets/**/*",
+      "assets/AppIcon.icns",
+      "assets/entitlements.mac.plist",
       "scripts/startup-lib.cjs",
-      "package.json"
+      "package.json",
+      "!**/node_modules/@xterm/**/src{,/**}",
+      "!**/node_modules/@xterm/**/{*.map,*.ts}",
+      "!**/node_modules/**/{README,README.md,CHANGELOG.md,LICENSE,LICENCE,license}{,.md}",
+      "!**/node_modules/**/{test,tests,__tests__,example,examples,docs}{,/**}"
     ],
     "asarUnpack": [
       "**/node-pty/**"

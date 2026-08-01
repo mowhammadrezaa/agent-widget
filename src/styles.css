@@ -41,19 +41,14 @@ body {
   background-color: rgba(0, 0, 0, 0) !important;
 }
 
-/* Clip the window contents to the visible chrome — kills square shell behind curves.
-   Mask is slightly larger than the 228×64 pill so subpixel/mask alignment can't
-   eat hit-targets on the capsule edge (notably the quit control). */
+/* Collapsed: no CSS mask. WebKit masks clip pointer events and were eating the
+   top/edges of the quit control (only the bottom of ✕ stayed clickable). */
 #app[data-mode="collapsed"] {
   background: transparent !important;
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='128' viewBox='0 0 240 128'%3E%3Crect x='4' y='28' width='232' height='72' rx='36' ry='36' fill='%23000'/%3E%3C/svg%3E");
-  -webkit-mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='128' viewBox='0 0 240 128'%3E%3Crect x='4' y='28' width='232' height='72' rx='36' ry='36' fill='%23000'/%3E%3C/svg%3E");
-  mask-size: 100% 100%;
-  mask-repeat: no-repeat;
-  mask-position: center;
+}
+
+#app[data-mode="collapsed"] #panel {
+  visibility: hidden;
 }
 
 #app[data-mode="expanded"] {
@@ -204,15 +199,13 @@ body {
   z-index: 3;
   margin-left: auto;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 1px solid transparent;
-  /* Keep real alpha so Electron forward-mouse hit-testing sees the control */
-  background: rgba(255, 255, 255, 0.08);
+  /* Opaque-enough fill: Electron forward-mouse ignores near-zero alpha pixels */
+  background: rgba(232, 240, 234, 0.14);
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -221,21 +214,28 @@ body {
   transition:
     background 140ms ease,
     color 140ms ease,
-    border-color 140ms ease,
-    opacity 140ms ease;
+    border-color 140ms ease;
 }
 
-/* Extra hit slop — the visible circle stays 28px; clicks land across ~40px */
+#pill-quit svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Solid hit slop — transparent ::before is invisible to Electron alpha hit-tests */
 #pill-quit::before {
   content: "";
   position: absolute;
-  inset: -8px;
+  inset: -10px;
   border-radius: 50%;
+  background: rgba(12, 18, 16, 0.02);
 }
 
 #pill-quit:hover {
   color: #ffb4a8;
-  background: rgba(255, 122, 102, 0.16);
+  background: rgba(255, 122, 102, 0.22);
   border-color: rgba(255, 122, 102, 0.35);
 }
 

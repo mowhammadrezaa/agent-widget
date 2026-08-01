@@ -105,7 +105,7 @@ App shortcut: `~/Applications/Agent Widget.app`
 | `./uninstall` | Pick Auto or Custom uninstall |
 | `./uninstall --auto` | Remove app, login, config, logs |
 | `./uninstall --custom` | Ask what to remove |
-| `npm run dist` | Build unsigned macOS DMG into `release/` |
+| `npm run dist` | Build ad-hoc signed macOS DMG into `release/` |
 | `npm run dist:dir` | Build unpackaged `.app` for smoke tests |
 | `npm start` | Run from the repo |
 | `npm run rebuild` | Rebuild `node-pty` for Electron |

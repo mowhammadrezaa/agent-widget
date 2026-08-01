@@ -353,11 +353,13 @@ pill.addEventListener("mouseenter", () => {
     window.widget.setIgnoreMouse(false);
   }
 });
-pill.addEventListener("mouseleave", () => {
-  if (!expanded && !dragging && !ignoreMouse) {
-    ignoreMouse = true;
-    window.widget.setIgnoreMouse(true);
-  }
+pill.addEventListener("mouseleave", (e) => {
+  if (expanded || dragging || ignoreMouse) return;
+  // Quit sits on the capsule edge; leaving the pill onto its hit-slop
+  // must not re-enable click-through mid-click.
+  if (e.relatedTarget === pillQuit || pillQuit.contains?.(e.relatedTarget)) return;
+  ignoreMouse = true;
+  window.widget.setIgnoreMouse(true);
 });
 
 let dragging = false;
@@ -430,15 +432,20 @@ pillQuit.addEventListener("pointerdown", (e) => {
 document.addEventListener("mousemove", (e) => {
   if (expanded || dragging) return;
   const r = pill.getBoundingClientRect();
-  // Inflate slightly so the quit control's hit slop near the capsule edge
-  // still counts as "over the pill" for mouse passthrough arming.
-  const pad = 10;
+  const q = pillQuit.getBoundingClientRect();
+  // Inflate so quit hit-slop near the capsule edge still arms passthrough.
+  const pad = 14;
   const overPill =
     e.clientX >= r.left - pad &&
     e.clientX <= r.right + pad &&
     e.clientY >= r.top - pad &&
     e.clientY <= r.bottom + pad;
-  const nextIgnore = !overPill;
+  const overQuit =
+    e.clientX >= q.left - pad &&
+    e.clientX <= q.right + pad &&
+    e.clientY >= q.top - pad &&
+    e.clientY <= q.bottom + pad;
+  const nextIgnore = !(overPill || overQuit);
   if (nextIgnore === ignoreMouse) return;
   ignoreMouse = nextIgnore;
   window.widget.setIgnoreMouse(nextIgnore);
