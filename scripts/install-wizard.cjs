@@ -13,7 +13,7 @@ const readline = require("readline");
 const { spawn, spawnSync, execSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
-const CONFIG_PATH = path.join(os.homedir(), ".cursor-agent-widget.json");
+const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
 
 const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
 const c = {

@@ -2,6 +2,14 @@
 
 Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expands into a real terminal running Cursor’s `agent`, Claude Code, or any custom command.
 
+<p align="center">
+  <img src="docs/screenshots/pill.png" alt="Collapsed Agent Widget pill" width="320" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/panel.png" alt="Expanded Agent Widget terminal panel" width="720" />
+</p>
+
 ## Features
 
 - **Pill → panel** — collapsed capsule; click to expand a full PTY terminal
@@ -22,8 +30,8 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 ## Install
 
 ```bash
-git clone <repo-url> cursor-widget
-cd cursor-widget
+git clone <repo-url> agent-widget
+cd agent-widget
 ./install              # choose Auto or Custom
 ./install --auto       # defaults, no questions
 ./install --custom     # ask every preference
@@ -47,7 +55,7 @@ cd cursor-widget
 
 ## Configuration
 
-Stored at `~/.cursor-agent-widget.json`:
+Stored at `~/.agent-widget.json`:
 
 | Key | Meaning |
 | --- | --- |
@@ -56,7 +64,7 @@ Stored at `~/.cursor-agent-widget.json`:
 | `alwaysOnTop` | Float above other windows |
 | `customAgents` | User-defined `{ id, label, command }` entries |
 
-Login item: `~/Library/LaunchAgents/com.cursor.agent-widget.plist`  
+Login item: `~/Library/LaunchAgents/com.agent-widget.plist`  
 App shortcut: `~/Applications/Agent Widget.app`
 
 ## Scripts
@@ -71,6 +79,7 @@ App shortcut: `~/Applications/Agent Widget.app`
 | `./uninstall --custom` | Ask what to remove |
 | `npm start` | Run from the repo |
 | `npm run rebuild` | Rebuild `node-pty` for Electron |
+| `npm run screenshots` | Refresh README screenshots |
 
 ## Uninstall
 
@@ -102,4 +111,4 @@ Main process: `electron/main.cjs` · Preload: `electron/preload.cjs` · UI: `src
 
 ## License
 
-Private / unlicensed. Add a `LICENSE` if you publish the repo.
+[MIT](LICENSE) — free to use, modify, sell, and redistribute, as long as you keep the copyright notice and clearly indicate the original source repository.

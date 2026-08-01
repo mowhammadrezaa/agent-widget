@@ -13,7 +13,7 @@ const readline = require("readline");
 const { execSync, spawnSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
-const CONFIG_PATH = path.join(os.homedir(), ".cursor-agent-widget.json");
+const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
 const LOG_OUT = path.join(os.homedir(), "Library", "Logs", "agent-widget.log");
 const LOG_ERR = path.join(os.homedir(), "Library", "Logs", "agent-widget.err.log");
 
@@ -137,7 +137,7 @@ function choice(rl, question, options, defaultIndex = 0) {
 function isWidgetRunning() {
   try {
     const out = execSync(
-      'pgrep -fl "Agent Widget|cursor-agent-widget|electron.*cursor-widget" 2>/dev/null || true',
+      'pgrep -fl "Agent Widget|agent-widget|electron.*agent-widget" 2>/dev/null || true',
       { encoding: "utf8" },
     );
     return Boolean(out.trim());
@@ -148,7 +148,7 @@ function isWidgetRunning() {
 
 function quitWidget() {
   try {
-    execSync('pkill -f "cursor-widget/node_modules/electron" 2>/dev/null || true', {
+    execSync('pkill -f "agent-widget/node_modules/electron" 2>/dev/null || true', {
       stdio: "ignore",
     });
   } catch {
@@ -291,7 +291,7 @@ async function wizard() {
         running &&
         (await ask(promptRl, "Quit the running widget first?", { defaultValue: true }));
       removeApp = await ask(promptRl, "Remove app + login item?", { defaultValue: true });
-      removeConfig = await ask(promptRl, "Remove config ~/.cursor-agent-widget.json?", {
+      removeConfig = await ask(promptRl, "Remove config ~/.agent-widget.json?", {
         defaultValue: true,
       });
       removeLogs = await ask(promptRl, "Remove launch logs?", { defaultValue: true });

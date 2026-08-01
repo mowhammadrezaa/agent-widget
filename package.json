@@ -1,9 +1,10 @@
 {
-  "name": "cursor-agent-widget",
+  "name": "agent-widget",
   "version": "1.0.0",
-  "description": "Floating Mac desktop widget for the Cursor agent CLI",
+  "description": "Floating Mac desktop widget for AI agent CLIs",
   "main": "electron/main.cjs",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron .",
     "launch": "zsh scripts/launch.sh",
@@ -11,6 +12,7 @@
     "install:auto": "node scripts/install-wizard.cjs --auto",
     "uninstall:app": "node scripts/uninstall-wizard.cjs",
     "uninstall:auto": "node scripts/uninstall-wizard.cjs --auto",
+    "screenshots": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron scripts/capture-screenshots.cjs",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty && node scripts/ensure-electron.cjs",
     "ensure-electron": "node scripts/ensure-electron.cjs",

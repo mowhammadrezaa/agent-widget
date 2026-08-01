@@ -23,7 +23,7 @@ const EXPANDED = { width: 820, height: 560 };
 const COLLAPSED = { width: 240, height: 128 };
 const PILL = { width: 228, height: 64 };
 const MARGIN = 24;
-const CONFIG_PATH = path.join(os.homedir(), ".cursor-agent-widget.json");
+const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
 
 const BUILTIN_AGENTS = {
   cursor: {
@@ -767,7 +767,7 @@ function createTray() {
   image.setTemplateImage(true);
 
   tray = new Tray(image);
-  tray.setToolTip("Cursor Agent Widget");
+  tray.setToolTip("Agent Widget");
   rebuildTrayMenu();
 
   tray.on("click", () => {

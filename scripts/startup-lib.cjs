@@ -10,7 +10,7 @@ const ROOT = path.resolve(__dirname, "..");
 const HOME = os.homedir();
 const APP_NAME = "Agent Widget";
 const APP_DIR = path.join(HOME, "Applications", `${APP_NAME}.app`);
-const LABEL = "com.cursor.agent-widget";
+const LABEL = "com.agent-widget";
 const PLIST = path.join(HOME, "Library", "LaunchAgents", `${LABEL}.plist`);
 const LAUNCH = path.join(ROOT, "scripts", "launch.sh");
 
