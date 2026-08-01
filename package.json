@@ -19,8 +19,8 @@
     "ensure-electron": "node scripts/ensure-electron.cjs",
     "install-startup": "node scripts/install-startup.cjs",
     "uninstall-startup": "node scripts/uninstall-startup.cjs",
-    "dist": "electron-builder --mac dmg",
-    "dist:dir": "electron-builder --mac dir"
+    "dist": "electron-builder --mac dmg --publish never",
+    "dist:dir": "electron-builder --mac dir --publish never"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
