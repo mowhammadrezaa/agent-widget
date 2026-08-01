@@ -30,7 +30,7 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 ## Install
 
 ```bash
-git clone <repo-url> agent-widget
+git clone https://github.com/mowhammadrezaa/agent-widget.git agent-widget
 cd agent-widget
 ./install              # choose Auto or Custom
 ./install --auto       # defaults, no questions
