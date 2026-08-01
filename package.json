@@ -7,6 +7,10 @@
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron .",
     "launch": "zsh scripts/launch.sh",
+    "install:app": "node scripts/install-wizard.cjs",
+    "install:auto": "node scripts/install-wizard.cjs --auto",
+    "uninstall:app": "node scripts/uninstall-wizard.cjs",
+    "uninstall:auto": "node scripts/uninstall-wizard.cjs --auto",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty && node scripts/ensure-electron.cjs",
     "ensure-electron": "node scripts/ensure-electron.cjs",

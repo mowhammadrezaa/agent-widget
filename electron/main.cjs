@@ -11,7 +11,6 @@ const {
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { execSync } = require("child_process");
 const pty = require("node-pty");
 const startup = require("../scripts/startup-lib.cjs");
 
@@ -70,6 +69,9 @@ let agentId = "cursor";
 let customAgents = [];
 /** Stable pill screen rect — survives expand clamp so collapse doesn't jump. */
 let savedPillScreen = null;
+/** Cached PATH / agent binaries — avoid sync `zsh -lc` (loads full shell, freezes UI). */
+let cachedEnvPath = null;
+const agentPathCache = new Map();
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -161,47 +163,76 @@ function saveConfig() {
   }
 }
 
-function resolveAgentPath(id = agentId) {
-  const spec = getAgent(id);
-  if (spec.custom) {
-    const cmd = spec.command.trim();
-    if (path.isAbsolute(cmd.split(/\s+/)[0])) {
-      const bin = cmd.split(/\s+/)[0];
-      if (fs.existsSync(bin)) return bin;
-    }
-    try {
-      const binName = cmd.split(/\s+/)[0].replace(/'/g, "");
-      const found = execSync(`zsh -lc 'command -v ${binName}'`, {
-        encoding: "utf8",
-      }).trim();
-      if (found) return found;
-    } catch {
-      // fall through
-    }
-    return cmd.split(/\s+/)[0];
-  }
+function getEnvPath() {
+  if (cachedEnvPath) return cachedEnvPath;
+  const extras = [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    path.join(os.homedir(), ".local", "bin"),
+    path.join(os.homedir(), ".cursor", "bin"),
+    path.join(os.homedir(), ".claude", "bin"),
+  ];
+  const merged = [...extras, ...(process.env.PATH || "").split(":")].filter(Boolean);
+  cachedEnvPath = [...new Set(merged)].join(":");
+  return cachedEnvPath;
+}
 
-  const candidates = (spec.candidates || []).map((fn) => fn()).filter(Boolean);
-  for (const candidate of candidates) {
+function findOnPath(binName) {
+  if (!binName || binName.includes("/") || binName.includes("\\")) return "";
+  for (const dir of getEnvPath().split(":")) {
+    const full = path.join(dir, binName);
     try {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        return candidate;
-      }
+      if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
     } catch {
       // keep looking
     }
   }
+  return "";
+}
 
-  try {
-    const found = execSync(`zsh -lc '${spec.which}'`, {
-      encoding: "utf8",
-    }).trim();
-    if (found) return found;
-  } catch {
-    // ignore
+function clearAgentPathCache() {
+  agentPathCache.clear();
+}
+
+function resolveAgentPath(id = agentId) {
+  if (agentPathCache.has(id)) return agentPathCache.get(id);
+
+  const spec = getAgent(id);
+  let resolved = spec.command;
+
+  if (spec.custom) {
+    const cmd = spec.command.trim();
+    const bin = cmd.split(/\s+/)[0];
+    if (path.isAbsolute(bin) && fs.existsSync(bin)) {
+      resolved = bin;
+    } else {
+      resolved = findOnPath(bin) || bin;
+    }
+  } else {
+    const candidates = (spec.candidates || []).map((fn) => fn()).filter(Boolean);
+    let found = "";
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          found = candidate;
+          break;
+        }
+      } catch {
+        // keep looking
+      }
+    }
+    if (!found) {
+      for (const name of [spec.command, "cursor-agent"]) {
+        found = findOnPath(name);
+        if (found) break;
+      }
+    }
+    resolved = found || spec.command;
   }
 
-  return spec.command;
+  agentPathCache.set(id, resolved);
+  return resolved;
 }
 
 function setAgentId(nextId) {
@@ -211,6 +242,7 @@ function setAgentId(nextId) {
   }
   agentId = nextId;
   saveConfig();
+  clearAgentPathCache();
   restartPty();
   sendState();
 }
@@ -232,6 +264,7 @@ function addCustomAgent({ command, label } = {}) {
   customAgents.push(entry);
   agentId = id;
   saveConfig();
+  clearAgentPathCache();
   restartPty();
   sendState();
   return { ok: true, id };
@@ -245,6 +278,7 @@ function removeCustomAgent(id) {
     agentId = "cursor";
   }
   saveConfig();
+  clearAgentPathCache();
   restartPty();
   sendState();
   return { ok: true };
@@ -425,7 +459,6 @@ function createWindow() {
   });
 
   applyAlwaysOnTop();
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setHiddenInMissionControl(true);
   win.setBackgroundColor("#00000000");
   // Clear any residual system material.
@@ -477,8 +510,13 @@ function applyAlwaysOnTop() {
   if (!win || win.isDestroyed()) return;
   if (alwaysOnTop) {
     win.setAlwaysOnTop(true, "floating");
+    // Follow the user across Spaces and over fullscreen apps.
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } else {
     win.setAlwaysOnTop(false);
+    // Stay on the current desktop only — do not overlay fullscreen /
+    // maximized-to-new-Space apps.
+    win.setVisibleOnAllWorkspaces(false);
   }
 }
 
@@ -594,17 +632,11 @@ function ensurePty() {
 
   const env = {
     ...process.env,
+    PATH: getEnvPath(),
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
     FORCE_COLOR: "1",
   };
-
-  try {
-    const shellPath = execSync("zsh -lc 'printenv PATH'", { encoding: "utf8" }).trim();
-    if (shellPath) env.PATH = shellPath;
-  } catch {
-    // keep existing PATH
-  }
 
   // Drop ELECTRON_* so the nested agent CLI doesn't inherit Cursor's node mode.
   delete env.ELECTRON_RUN_AS_NODE;

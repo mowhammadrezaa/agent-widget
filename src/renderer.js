@@ -33,6 +33,14 @@ let expanded = false;
 let ignoreMouse = true;
 let disposedData = null;
 let disposedReset = null;
+let booted = false;
+
+function markBooted() {
+  if (booted) return;
+  booted = true;
+  pill.removeAttribute("data-boot");
+  pill.removeAttribute("aria-busy");
+}
 
 function shortenHome(p) {
   if (!p) return "~/";
@@ -193,6 +201,7 @@ function applyState(state) {
 
   btnRemoveAgent.hidden = !state.agentCustom;
 
+  markBooted();
   setMode(Boolean(state.expanded));
   if (state.expanded) ensureTerminal();
 }
@@ -231,6 +240,7 @@ function collapseNow() {
 
 // Hover only arms hit-testing — never opens. Click opens; drag moves.
 pill.addEventListener("mouseenter", () => {
+  if (pill.dataset.boot === "1") return;
   if (ignoreMouse) {
     ignoreMouse = false;
     window.widget.setIgnoreMouse(false);
@@ -249,6 +259,7 @@ let dragLast = null;
 
 pill.addEventListener("pointerdown", (e) => {
   if (expanded || e.button !== 0) return;
+  if (pill.dataset.boot === "1") return;
   if (e.target === pillQuit || pillQuit.contains(e.target)) return;
   dragging = true;
   dragMoved = false;

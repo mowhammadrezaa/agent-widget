@@ -158,6 +158,36 @@ body {
   text-transform: lowercase;
 }
 
+#pill[data-boot="1"] {
+  cursor: progress;
+}
+
+#pill[data-boot="1"] .orb {
+  animation: boot-pulse 0.9s ease-in-out infinite;
+}
+
+#pill[data-boot="1"] .pill-sub {
+  color: var(--accent-2);
+}
+
+@keyframes boot-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+    box-shadow:
+      0 0 0 3px rgba(92, 224, 178, 0.12),
+      0 0 12px rgba(92, 224, 178, 0.35);
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    box-shadow:
+      0 0 0 5px rgba(92, 224, 178, 0.18),
+      0 0 22px rgba(183, 243, 92, 0.5);
+  }
+}
+
 .chev {
   margin-left: auto;
   width: 7px;

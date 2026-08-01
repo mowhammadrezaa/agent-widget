@@ -1,0 +1,13 @@
+#!/bin/zsh
+# Agent Widget — macOS install entrypoint
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js 18+ is required. Install from https://nodejs.org" >&2
+  exit 1
+fi
+
+chmod +x "$ROOT/scripts/launch.sh" 2>/dev/null || true
+exec node "$ROOT/scripts/install-wizard.cjs" "$@"

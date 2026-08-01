@@ -96,8 +96,16 @@ function bootoutLaunchAgent() {
   }
 }
 
+/**
+ * Write the open-at-login LaunchAgent.
+ * Does not bootstrap into the current session — `RunAtLoad` would start the
+ * app immediately, which surprises install / toggle flows. The plist in
+ * ~/Library/LaunchAgents is enough for the next login.
+ */
 function writeLaunchAgent() {
   fs.mkdirSync(path.dirname(PLIST), { recursive: true });
+  // Stop any previously loaded agent so we don't leave a stale job around.
+  bootoutLaunchAgent();
   fs.writeFileSync(
     PLIST,
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -129,26 +137,22 @@ function writeLaunchAgent() {
 </plist>
 `,
   );
-
-  bootoutLaunchAgent();
-  execSync(`launchctl bootstrap gui/$(id -u) "${PLIST}"`, { stdio: "ignore" });
-  try {
-    execSync(`launchctl enable gui/$(id -u)/${LABEL}`, { stdio: "ignore" });
-  } catch {
-    // ignore
-  }
 }
 
 function isOpenAtLogin() {
   return fs.existsSync(PLIST);
 }
 
-/** Install app bundle + LaunchAgent (open at login). */
-function install() {
+/** Install app bundle; optionally register open-at-login (does not start the app). */
+function install({ openAtLogin = true } = {}) {
   ensureLaunchScriptExecutable();
   writeAppBundle();
-  writeLaunchAgent();
-  return { appDir: APP_DIR, plist: PLIST };
+  if (openAtLogin) {
+    writeLaunchAgent();
+  } else {
+    uninstallLogin();
+  }
+  return { appDir: APP_DIR, plist: PLIST, openAtLogin: isOpenAtLogin() };
 }
 
 /** Disable open-at-login only; keep ~/Applications/Agent Widget.app. */
@@ -173,7 +177,7 @@ function uninstallAll() {
 
 function setOpenAtLogin(enabled) {
   if (enabled) {
-    install();
+    install({ openAtLogin: true });
   } else {
     uninstallLogin();
   }
