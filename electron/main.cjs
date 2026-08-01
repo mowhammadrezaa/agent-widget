@@ -744,6 +744,13 @@ function setAlwaysOnTopEnabled(next) {
   sendState();
 }
 
+function isOpenAtLoginEnabled() {
+  if (app.isPackaged) {
+    return Boolean(app.getLoginItemSettings().openAtLogin);
+  }
+  return startup.isOpenAtLogin();
+}
+
 function sendState() {
   if (!win || win.isDestroyed()) return;
   syncAgentIdFromActiveTab();
@@ -752,7 +759,7 @@ function sendState() {
   win.webContents.send("widget:state", {
     expanded,
     alwaysOnTop,
-    openAtLogin: startup.isOpenAtLogin(),
+    openAtLogin: isOpenAtLoginEnabled(),
     workspace,
     agentId,
     agentLabel: spec.label,
@@ -768,7 +775,11 @@ function sendState() {
 
 function setOpenAtLoginEnabled(next) {
   try {
-    startup.setOpenAtLogin(Boolean(next));
+    if (app.isPackaged) {
+      app.setLoginItemSettings({ openAtLogin: Boolean(next) });
+    } else {
+      startup.setOpenAtLogin(Boolean(next));
+    }
   } catch (err) {
     const { dialog } = require("electron");
     dialog.showErrorBox(
@@ -778,7 +789,7 @@ function setOpenAtLoginEnabled(next) {
   }
   rebuildTrayMenu();
   sendState();
-  return startup.isOpenAtLogin();
+  return isOpenAtLoginEnabled();
 }
 
 function setExpanded(next) {
@@ -987,7 +998,7 @@ function restartPty(tabId = activeTabId) {
 
 function rebuildTrayMenu() {
   if (!tray) return;
-  const openAtLogin = startup.isOpenAtLogin();
+  const openAtLogin = isOpenAtLoginEnabled();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -1139,7 +1150,7 @@ function registerIpc() {
     return {
       expanded,
       alwaysOnTop,
-      openAtLogin: startup.isOpenAtLogin(),
+      openAtLogin: isOpenAtLoginEnabled(),
       workspace,
       agentId,
       agentLabel: spec.label,

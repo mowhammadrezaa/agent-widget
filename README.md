@@ -25,10 +25,21 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 ## Requirements
 
 - macOS 13+
-- Node.js 18+
 - An agent CLI on your `PATH` (`agent` / `cursor-agent` and/or `claude`)
+- For the **source** install path: Node.js 18+ and git
 
-## Install
+## Download
+
+Grab the latest **Agent Widget.dmg** from [Releases](https://github.com/mowhammadrezaa/agent-widget/releases) (or build one locally with `npm run dist` — see below).
+
+1. Open the DMG and drag **Agent Widget** into Applications
+2. Launch it from Applications / Spotlight (`Agent Widget`)
+
+The DMG is unsigned. Add your Gatekeeper / “Open anyway” steps here.
+
+You still need a Cursor (`agent`) or Claude (`claude`) CLI installed for the widget to talk to an agent.
+
+## Install from source
 
 ```bash
 git clone https://github.com/mowhammadrezaa/agent-widget.git agent-widget
@@ -41,6 +52,15 @@ cd agent-widget
 **Auto** installs deps if needed, uses sensible defaults (workspace, Cursor agent, always on top, open at login), creates `~/Applications/Agent Widget.app`, and launches.
 
 **Custom** asks each preference interactively.
+
+### Build a DMG (maintainers)
+
+```bash
+npm install
+npm run dist
+```
+
+The unsigned disk image lands in `release/` (e.g. `Agent Widget-1.0.0-arm64.dmg`).
 
 ## Usage
 
@@ -84,6 +104,8 @@ App shortcut: `~/Applications/Agent Widget.app`
 | `./uninstall` | Pick Auto or Custom uninstall |
 | `./uninstall --auto` | Remove app, login, config, logs |
 | `./uninstall --custom` | Ask what to remove |
+| `npm run dist` | Build unsigned macOS DMG into `release/` |
+| `npm run dist:dir` | Build unpackaged `.app` for smoke tests |
 | `npm start` | Run from the repo |
 | `npm run rebuild` | Rebuild `node-pty` for Electron |
 | `npm run screenshots` | Refresh README screenshots |

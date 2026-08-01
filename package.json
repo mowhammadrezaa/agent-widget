@@ -5,6 +5,7 @@
   "main": "electron/main.cjs",
   "private": true,
   "license": "MIT",
+  "author": "Agent Widget",
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron .",
     "launch": "zsh scripts/launch.sh",
@@ -17,7 +18,9 @@
     "postinstall": "electron-rebuild -f -w node-pty && node scripts/ensure-electron.cjs",
     "ensure-electron": "node scripts/ensure-electron.cjs",
     "install-startup": "node scripts/install-startup.cjs",
-    "uninstall-startup": "node scripts/uninstall-startup.cjs"
+    "uninstall-startup": "node scripts/uninstall-startup.cjs",
+    "dist": "electron-builder --mac dmg",
+    "dist:dir": "electron-builder --mac dir"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -27,6 +30,54 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
-    "electron": "^37.2.0"
+    "electron": "^37.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.agent-widget",
+    "productName": "Agent Widget",
+    "copyright": "Copyright © Agent Widget contributors",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "assets/**/*",
+      "scripts/startup-lib.cjs",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node-pty/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/AppIcon.icns",
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "gatekeeperAssess": false,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "LSUIElement": true,
+        "LSMinimumSystemVersion": "13.0"
+      }
+    },
+    "dmg": {
+      "title": "Agent Widget",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }
