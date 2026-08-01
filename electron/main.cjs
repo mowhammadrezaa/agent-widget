@@ -705,6 +705,30 @@ function createTray() {
       },
       { type: "separator" },
       {
+        label: "Install Login + Shortcut App",
+        click: () => {
+          try {
+            execSync("node scripts/install-startup.cjs", {
+              cwd: path.join(__dirname, ".."),
+              stdio: "ignore",
+            });
+            const { dialog } = require("electron");
+            dialog.showMessageBox(win || undefined, {
+              type: "info",
+              title: "Startup installed",
+              message: "Agent Widget will open at login.",
+              detail:
+                "A ~/Applications/Agent Widget.app was also created.\n\n" +
+                "To launch with a keyboard shortcut after quitting:\n" +
+                "Shortcuts app → Open App → Agent Widget → Add Keyboard Shortcut.",
+            });
+          } catch (err) {
+            const { dialog } = require("electron");
+            dialog.showErrorBox("Startup install failed", String(err?.message || err));
+          }
+        },
+      },
+      {
         label: "Restart Agent",
         click: () => restartPty(),
       },
@@ -762,6 +786,16 @@ function registerIpc() {
     menu.popup({ window: win });
   });
   ipcMain.on("widget:set-always-on-top", (_e, value) => setAlwaysOnTopEnabled(value));
+  ipcMain.on("widget:install-startup", () => {
+    try {
+      execSync("node scripts/install-startup.cjs", {
+        cwd: path.join(__dirname, ".."),
+        stdio: "ignore",
+      });
+    } catch {
+      // renderer can still tell user to run npm run install-startup
+    }
+  });
   ipcMain.on("widget:set-ignore-mouse", (_e, ignore) => {
     if (!win || win.isDestroyed() || expanded) return;
     if (!alwaysOnTop) {

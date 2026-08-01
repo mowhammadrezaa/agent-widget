@@ -6,9 +6,12 @@
   "private": true,
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron .",
+    "launch": "zsh scripts/launch.sh",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty && node scripts/ensure-electron.cjs",
-    "ensure-electron": "node scripts/ensure-electron.cjs"
+    "ensure-electron": "node scripts/ensure-electron.cjs",
+    "install-startup": "node scripts/install-startup.cjs",
+    "uninstall-startup": "node scripts/uninstall-startup.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
