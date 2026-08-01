@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self'; img-src 'self' data:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cursor Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" data-mode="collapsed">
+      <button id="pill" type="button" aria-label="Open Cursor Agent">
+        <span class="orb" aria-hidden="true"></span>
+        <span class="pill-copy">
+          <span class="pill-title">Agent</span>
+          <span class="pill-sub">ready</span>
+        </span>
+        <span class="chev" aria-hidden="true"></span>
+      </button>
+
+      <section id="panel" aria-hidden="true">
+        <header id="chrome" class="drag">
+          <div class="brand">
+            <span class="orb small" aria-hidden="true"></span>
+            <div class="brand-text">
+              <strong>Cursor Agent</strong>
+              <span id="workspace-label">~/</span>
+            </div>
+          </div>
+          <div class="actions no-drag">
+            <button id="btn-workspace" type="button" title="Choose workspace">Folder</button>
+            <button id="btn-restart" type="button" title="Restart agent">Restart</button>
+            <button id="btn-pin" type="button" title="Keep open" aria-pressed="false">Pin</button>
+            <button id="btn-collapse" type="button" title="Collapse">−</button>
+          </div>
+        </header>
+        <div id="terminal" class="no-drag"></div>
+        <footer id="hint" class="no-drag">
+          <span>⌘⇧A toggle</span>
+          <span>same as terminal <code>agent</code></span>
+        </footer>
+      </section>
+    </div>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>
