@@ -19,35 +19,64 @@
   </head>
   <body>
     <div id="app" data-mode="collapsed">
-      <button id="pill" type="button" aria-label="Open Cursor Agent">
+      <div id="pill" role="button" tabindex="0" aria-label="Cursor Agent" title="Click to open · Drag to move · ✕ to quit">
         <span class="orb" aria-hidden="true"></span>
         <span class="pill-copy">
           <span class="pill-title">Agent</span>
           <span class="pill-sub">ready</span>
         </span>
-        <span class="chev" aria-hidden="true"></span>
-      </button>
+        <button id="pill-quit" type="button" title="Quit" aria-label="Quit Agent Widget">✕</button>
+      </div>
 
       <section id="panel" aria-hidden="true">
         <header id="chrome" class="drag">
           <div class="brand">
             <span class="orb small" aria-hidden="true"></span>
             <div class="brand-text">
-              <strong>Cursor Agent</strong>
+              <strong id="brand-title">Cursor Agent</strong>
               <span id="workspace-label">~/</span>
             </div>
           </div>
           <div class="actions no-drag">
+            <label class="agent-picker" title="Active agent">
+              <span class="sr-only">Agent</span>
+              <select id="agent-select" aria-label="Choose agent">
+                <option value="cursor">Cursor</option>
+                <option value="claude">Claude</option>
+              </select>
+            </label>
+            <button id="btn-add-agent" type="button" title="Add custom agent command">＋</button>
+            <button id="btn-remove-agent" type="button" title="Remove custom agent" hidden>⌫</button>
             <button id="btn-workspace" type="button" title="Choose workspace">Folder</button>
             <button id="btn-restart" type="button" title="Restart agent">Restart</button>
+            <button id="btn-top" type="button" title="Keep above other windows" aria-pressed="true">Top</button>
             <button id="btn-pin" type="button" title="Keep open" aria-pressed="false">Pin</button>
             <button id="btn-collapse" type="button" title="Collapse">−</button>
+            <button id="btn-quit" type="button" title="Quit" class="danger">✕</button>
           </div>
         </header>
+        <div id="agent-add" class="no-drag" hidden>
+          <input
+            id="agent-command-input"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Command e.g. codex, aider, /usr/local/bin/my-agent"
+          />
+          <input
+            id="agent-label-input"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Label (optional)"
+          />
+          <button id="btn-agent-save" type="button">Add</button>
+          <button id="btn-agent-cancel" type="button">Cancel</button>
+        </div>
         <div id="terminal" class="no-drag"></div>
         <footer id="hint" class="no-drag">
           <span>⌘⇧A toggle</span>
-          <span>same as terminal <code>agent</code></span>
+          <span>running <code id="hint-command">agent</code></span>
         </footer>
       </section>
     </div>

@@ -1,28 +1,31 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+function subscribe(channel, cb) {
+  ipcRenderer.removeAllListeners(channel);
+  const listener = (_e, ...args) => cb(...args);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 contextBridge.exposeInMainWorld("widget", {
   expand: () => ipcRenderer.send("widget:expand"),
-  collapse: () => ipcRenderer.send("widget:collapse"),
+  collapse: (opts) => ipcRenderer.send("widget:collapse", opts || {}),
   toggle: () => ipcRenderer.send("widget:toggle"),
   pin: (value) => ipcRenderer.send("widget:pin", value),
+  setAlwaysOnTop: (value) => ipcRenderer.send("widget:set-always-on-top", value),
   restart: () => ipcRenderer.send("widget:restart"),
+  setIgnoreMouse: (ignore) => ipcRenderer.send("widget:set-ignore-mouse", ignore),
+  moveBy: (dx, dy) => ipcRenderer.send("widget:move-by", { dx, dy }),
+  quit: () => ipcRenderer.send("widget:quit"),
+  showPillMenu: () => ipcRenderer.send("widget:pill-menu"),
+  setAgent: (id) => ipcRenderer.send("widget:set-agent", id),
+  addAgent: (payload) => ipcRenderer.invoke("widget:add-agent", payload),
+  removeAgent: (id) => ipcRenderer.invoke("widget:remove-agent", id),
   getState: () => ipcRenderer.invoke("widget:get-state"),
   pickWorkspace: () => ipcRenderer.invoke("widget:pick-workspace"),
-  onState: (cb) => {
-    const listener = (_e, state) => cb(state);
-    ipcRenderer.on("widget:state", listener);
-    return () => ipcRenderer.removeListener("widget:state", listener);
-  },
+  onState: (cb) => subscribe("widget:state", cb),
   write: (data) => ipcRenderer.send("pty:input", data),
   resize: (cols, rows) => ipcRenderer.send("pty:resize", { cols, rows }),
-  onData: (cb) => {
-    const listener = (_e, data) => cb(data);
-    ipcRenderer.on("pty:data", listener);
-    return () => ipcRenderer.removeListener("pty:data", listener);
-  },
-  onClear: (cb) => {
-    const listener = () => cb();
-    ipcRenderer.on("pty:clear", listener);
-    return () => ipcRenderer.removeListener("pty:clear", listener);
-  },
+  onData: (cb) => subscribe("pty:data", cb),
+  onReset: (cb) => subscribe("pty:reset", cb),
 });
