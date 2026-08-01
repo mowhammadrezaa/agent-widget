@@ -26,6 +26,14 @@ const MARGIN = 24;
 const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
 const BUFFER_PATH = path.join(os.homedir(), ".agent-widget-buffers.json");
 
+const IS_DARWIN = process.platform === "darwin";
+const IS_WIN = process.platform === "win32";
+const IS_LINUX = process.platform === "linux";
+const TOGGLE_SHORTCUT = "CommandOrControl+Shift+A";
+const TOGGLE_SHORTCUT_LABEL = IS_DARWIN ? "⌘⇧A" : "Ctrl+Shift+A";
+const LINUX_AUTOSTART_DIR = path.join(os.homedir(), ".config", "autostart");
+const LINUX_AUTOSTART_FILE = path.join(LINUX_AUTOSTART_DIR, "agent-widget.desktop");
+
 const BUILTIN_AGENTS = {
   cursor: {
     id: "cursor",
@@ -38,8 +46,16 @@ const BUILTIN_AGENTS = {
       () => path.join(os.homedir(), ".local", "bin", "cursor-agent"),
       () => "/opt/homebrew/bin/agent",
       () => "/usr/local/bin/agent",
+      () =>
+        process.env.LOCALAPPDATA &&
+        path.join(process.env.LOCALAPPDATA, "Programs", "cursor", "resources", "app", "bin", "agent.cmd"),
+      () =>
+        process.env.LOCALAPPDATA &&
+        path.join(process.env.LOCALAPPDATA, "Programs", "cursor", "resources", "app", "bin", "cursor-agent.cmd"),
+      () =>
+        process.env.USERPROFILE &&
+        path.join(process.env.USERPROFILE, "scoop", "shims", "agent.exe"),
     ],
-    which: "command -v agent || command -v cursor-agent",
     installHint: "Install the Cursor CLI (`agent`), then click Restart.",
   },
   claude: {
@@ -52,8 +68,16 @@ const BUILTIN_AGENTS = {
       () => path.join(os.homedir(), ".local", "bin", "claude"),
       () => "/opt/homebrew/bin/claude",
       () => "/usr/local/bin/claude",
+      () =>
+        process.env.LOCALAPPDATA &&
+        path.join(process.env.LOCALAPPDATA, "Programs", "claude", "claude.exe"),
+      () =>
+        process.env.APPDATA &&
+        path.join(process.env.APPDATA, "npm", "claude.cmd"),
+      () =>
+        process.env.USERPROFILE &&
+        path.join(process.env.USERPROFILE, "scoop", "shims", "claude.exe"),
     ],
-    which: "command -v claude",
     installHint: "Install Claude Code (`claude`), then click Restart.",
   },
 };
@@ -276,32 +300,111 @@ function saveBuffersNow() {
   }
 }
 
+function pathExtras() {
+  const home = os.homedir();
+  const extras = [
+    path.join(home, ".local", "bin"),
+    path.join(home, ".cursor", "bin"),
+    path.join(home, ".claude", "bin"),
+  ];
+  if (IS_DARWIN) {
+    extras.push("/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin");
+  } else if (IS_LINUX) {
+    extras.push("/usr/local/bin", "/usr/bin");
+  } else if (IS_WIN) {
+    if (process.env.LOCALAPPDATA) {
+      extras.push(
+        path.join(process.env.LOCALAPPDATA, "Programs", "cursor", "resources", "app", "bin"),
+      );
+    }
+    if (process.env.APPDATA) {
+      extras.push(path.join(process.env.APPDATA, "npm"));
+    }
+    if (process.env.USERPROFILE) {
+      extras.push(path.join(process.env.USERPROFILE, "scoop", "shims"));
+    }
+  }
+  return extras;
+}
+
 function getEnvPath() {
   if (cachedEnvPath) return cachedEnvPath;
-  const extras = [
-    "/opt/homebrew/bin",
-    "/opt/homebrew/sbin",
-    "/usr/local/bin",
-    path.join(os.homedir(), ".local", "bin"),
-    path.join(os.homedir(), ".cursor", "bin"),
-    path.join(os.homedir(), ".claude", "bin"),
-  ];
-  const merged = [...extras, ...(process.env.PATH || "").split(":")].filter(Boolean);
-  cachedEnvPath = [...new Set(merged)].join(":");
+  const fromEnv = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const merged = [...pathExtras(), ...fromEnv];
+  cachedEnvPath = [...new Set(merged)].join(path.delimiter);
   return cachedEnvPath;
+}
+
+function candidateNames(binName) {
+  if (!IS_WIN) return [binName];
+  const lower = binName.toLowerCase();
+  if (/\.(exe|cmd|bat|ps1)$/i.test(lower)) return [binName];
+  return [binName, `${binName}.cmd`, `${binName}.exe`, `${binName}.bat`];
 }
 
 function findOnPath(binName) {
   if (!binName || binName.includes("/") || binName.includes("\\")) return "";
-  for (const dir of getEnvPath().split(":")) {
-    const full = path.join(dir, binName);
-    try {
-      if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
-    } catch {
-      // keep looking
+  for (const dir of getEnvPath().split(path.delimiter)) {
+    for (const name of candidateNames(binName)) {
+      const full = path.join(dir, name);
+      try {
+        if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
+      } catch {
+        // keep looking
+      }
     }
   }
   return "";
+}
+
+function unixShell() {
+  const shell = process.env.SHELL;
+  if (shell && fs.existsSync(shell)) return shell;
+  if (fs.existsSync("/bin/bash")) return "/bin/bash";
+  if (fs.existsSync("/bin/zsh")) return "/bin/zsh";
+  return "/bin/sh";
+}
+
+function quoteDesktopExec(execPath) {
+  if (!/[ \t\n"$\\]/.test(execPath)) return execPath;
+  return `"${execPath.replace(/(["\\$`])/g, "\\$1")}"`;
+}
+
+function packagedExecPath() {
+  if (process.env.APPIMAGE) return process.env.APPIMAGE;
+  return process.execPath;
+}
+
+function isLinuxOpenAtLogin() {
+  try {
+    return fs.existsSync(LINUX_AUTOSTART_FILE);
+  } catch {
+    return false;
+  }
+}
+
+function setLinuxOpenAtLogin(enabled) {
+  if (enabled) {
+    fs.mkdirSync(LINUX_AUTOSTART_DIR, { recursive: true });
+    const exec = quoteDesktopExec(packagedExecPath());
+    fs.writeFileSync(
+      LINUX_AUTOSTART_FILE,
+      `[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Agent Widget
+Comment=Floating desktop widget for AI agent CLIs
+Exec=${exec}
+Terminal=false
+Categories=Utility;Development;
+X-GNOME-Autostart-enabled=true
+Hidden=false
+`,
+      "utf8",
+    );
+  } else {
+    fs.rmSync(LINUX_AUTOSTART_FILE, { force: true });
+  }
 }
 
 function clearAgentPathCache() {
@@ -670,14 +773,19 @@ function createWindow() {
   });
 
   applyAlwaysOnTop();
-  win.setHiddenInMissionControl(true);
-  win.setBackgroundColor("#00000000");
-  // Clear any residual system material.
-  try {
-    win.setVibrancy(null);
-  } catch {
-    // ignore
+  if (IS_DARWIN) {
+    try {
+      win.setHiddenInMissionControl(true);
+    } catch {
+      // ignore
+    }
+    try {
+      win.setVibrancy(null);
+    } catch {
+      // ignore
+    }
   }
+  win.setBackgroundColor("#00000000");
 
   win.loadFile(path.join(__dirname, "..", "src", "index.html"));
 
@@ -719,16 +827,18 @@ function requestCollapse() {
 
 function applyAlwaysOnTop() {
   if (!win || win.isDestroyed()) return;
-  if (alwaysOnTop) {
-    win.setAlwaysOnTop(true, "floating");
-    // Follow the user across Spaces and over fullscreen apps.
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  } else {
-    win.setAlwaysOnTop(false);
-    // Stay on the current desktop only — do not overlay fullscreen /
-    // maximized-to-new-Space apps.
-    win.setVisibleOnAllWorkspaces(false);
+  if (IS_DARWIN) {
+    if (alwaysOnTop) {
+      win.setAlwaysOnTop(true, "floating");
+      // Follow the user across Spaces and over fullscreen apps.
+      win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    } else {
+      win.setAlwaysOnTop(false);
+      win.setVisibleOnAllWorkspaces(false);
+    }
+    return;
   }
+  win.setAlwaysOnTop(Boolean(alwaysOnTop));
 }
 
 function setAlwaysOnTopEnabled(next) {
@@ -745,18 +855,23 @@ function setAlwaysOnTopEnabled(next) {
 }
 
 function isOpenAtLoginEnabled() {
+  if (IS_LINUX) {
+    return isLinuxOpenAtLogin();
+  }
   if (app.isPackaged) {
     return Boolean(app.getLoginItemSettings().openAtLogin);
   }
-  return startup.isOpenAtLogin();
+  if (IS_DARWIN) {
+    return startup.isOpenAtLogin();
+  }
+  return false;
 }
 
-function sendState() {
-  if (!win || win.isDestroyed()) return;
+function buildStatePayload() {
   syncAgentIdFromActiveTab();
   const spec = currentAgent();
   const activePty = activeTabId ? ptys.get(activeTabId) : null;
-  win.webContents.send("widget:state", {
+  return {
     expanded,
     alwaysOnTop,
     openAtLogin: isOpenAtLoginEnabled(),
@@ -770,14 +885,25 @@ function sendState() {
     tabs: listTabs(),
     activeTabId,
     running: Boolean(activePty?.process),
-  });
+    platform: process.platform,
+    shortcutLabel: TOGGLE_SHORTCUT_LABEL,
+  };
+}
+
+function sendState() {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send("widget:state", buildStatePayload());
 }
 
 function setOpenAtLoginEnabled(next) {
   try {
-    if (app.isPackaged) {
+    if (IS_LINUX) {
+      if (app.isPackaged) {
+        setLinuxOpenAtLogin(Boolean(next));
+      }
+    } else if (app.isPackaged) {
       app.setLoginItemSettings({ openAtLogin: Boolean(next) });
-    } else {
+    } else if (IS_DARWIN) {
       startup.setOpenAtLogin(Boolean(next));
     }
   } catch (err) {
@@ -912,14 +1038,25 @@ function ensurePty(tabId = activeTabId) {
   let spawned;
   try {
     if (spec.custom) {
-      // Arbitrary user command (may include args) via login shell for PATH.
-      spawned = pty.spawn("/bin/zsh", ["-lc", spec.command], {
-        name: "xterm-256color",
-        cols,
-        rows,
-        cwd: workspace,
-        env,
-      });
+      // Arbitrary user command (may include args) via a shell for PATH.
+      if (IS_WIN) {
+        const comspec = process.env.ComSpec || "cmd.exe";
+        spawned = pty.spawn(comspec, ["/d", "/s", "/c", spec.command], {
+          name: "xterm-256color",
+          cols,
+          rows,
+          cwd: workspace,
+          env,
+        });
+      } else {
+        spawned = pty.spawn(unixShell(), ["-lc", spec.command], {
+          name: "xterm-256color",
+          cols,
+          rows,
+          cwd: workspace,
+          env,
+        });
+      }
     } else {
       spawned = pty.spawn(agentPath, [], {
         name: "xterm-256color",
@@ -1045,7 +1182,9 @@ function createTray() {
   const pngBase64 =
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPUlEQVQ4T2NkYGD4z0ABYBzVMKoBBgYGBob/UAaTAcXG/xkwACaGmYGBgYERrysYKTUAph/FYRQD0DYAALq/AxG1QvK0AAAAAElFTkSuQmCC";
   const image = nativeImage.createFromDataURL(`data:image/png;base64,${pngBase64}`);
-  image.setTemplateImage(true);
+  if (IS_DARWIN) {
+    image.setTemplateImage(true);
+  }
 
   tray = new Tray(image);
   tray.setToolTip("Agent Widget");
@@ -1143,26 +1282,7 @@ function registerIpc() {
     replayPtyBuffer(tabId);
     return { ok: true };
   });
-  ipcMain.handle("widget:get-state", () => {
-    syncAgentIdFromActiveTab();
-    const spec = currentAgent();
-    const activePty = activeTabId ? ptys.get(activeTabId) : null;
-    return {
-      expanded,
-      alwaysOnTop,
-      openAtLogin: isOpenAtLoginEnabled(),
-      workspace,
-      agentId,
-      agentLabel: spec.label,
-      agentCommand: spec.command,
-      agentCustom: Boolean(spec.custom),
-      agentPath: resolveAgentPath(agentId),
-      agents: listAgents(),
-      tabs: listTabs(),
-      activeTabId,
-      running: Boolean(activePty?.process),
-    };
-  });
+  ipcMain.handle("widget:get-state", () => buildStatePayload());
   ipcMain.on("pty:input", (_e, payload) => {
     if (payload && typeof payload === "object" && "data" in payload) {
       writePty(payload.data, payload.tabId || activeTabId);
@@ -1202,7 +1322,7 @@ if (gotLock) {
     createWindow();
     createTray();
 
-    globalShortcut.register("CommandOrControl+Shift+A", () => {
+    globalShortcut.register(TOGGLE_SHORTCUT, () => {
       if (!win) createWindow();
       if (win.isVisible() && expanded) {
         setExpanded(false);

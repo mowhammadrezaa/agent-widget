@@ -1,26 +1,29 @@
 {
   "name": "agent-widget",
   "version": "1.0.0",
-  "description": "Floating Mac desktop widget for AI agent CLIs",
+  "description": "Floating desktop widget for AI agent CLIs",
   "main": "electron/main.cjs",
   "private": true,
   "license": "MIT",
   "author": "Agent Widget",
   "scripts": {
-    "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron .",
+    "start": "node scripts/start.cjs",
     "launch": "zsh scripts/launch.sh",
     "install:app": "node scripts/install-wizard.cjs",
     "install:auto": "node scripts/install-wizard.cjs --auto",
     "uninstall:app": "node scripts/uninstall-wizard.cjs",
     "uninstall:auto": "node scripts/uninstall-wizard.cjs --auto",
-    "screenshots": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron scripts/capture-screenshots.cjs",
+    "screenshots": "node scripts/run-electron.cjs scripts/capture-screenshots.cjs",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty && node scripts/ensure-electron.cjs",
     "ensure-electron": "node scripts/ensure-electron.cjs",
     "install-startup": "node scripts/install-startup.cjs",
     "uninstall-startup": "node scripts/uninstall-startup.cjs",
-    "dist": "electron-builder --mac dmg --publish never",
-    "dist:dir": "electron-builder --mac dir --publish never"
+    "dist": "electron-builder --publish never",
+    "dist:mac": "electron-builder --mac dmg --publish never",
+    "dist:win": "electron-builder --win nsis --publish never",
+    "dist:linux": "electron-builder --linux AppImage --publish never",
+    "dist:dir": "electron-builder --dir --publish never"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -46,6 +49,8 @@
       "electron/**/*",
       "src/**/*",
       "assets/AppIcon.icns",
+      "assets/icon.ico",
+      "assets/icon.png",
       "assets/entitlements.mac.plist",
       "scripts/startup-lib.cjs",
       "package.json",
@@ -63,6 +68,7 @@
       "target": [
         "dmg"
       ],
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "identity": "-",
       "gatekeeperAssess": false,
       "hardenedRuntime": true,
@@ -87,6 +93,35 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agent Widget"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "assets/icon.png",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "Name": "Agent Widget",
+          "Comment": "Floating desktop widget for AI agent CLIs",
+          "Categories": "Utility;Development;"
+        }
+      }
     }
   }
 }

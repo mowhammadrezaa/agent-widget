@@ -17,6 +17,7 @@ const btnRemoveAgent = document.getElementById("btn-remove-agent");
 const btnAgentSave = document.getElementById("btn-agent-save");
 const btnAgentCancel = document.getElementById("btn-agent-cancel");
 const hintCommand = document.getElementById("hint-command");
+const hintShortcut = document.getElementById("hint-shortcut");
 const pillTitle = document.querySelector(".pill-title");
 const btnTop = document.getElementById("btn-top");
 const btnLogin = document.getElementById("btn-login");
@@ -248,6 +249,9 @@ function applyState(state) {
   if (pillTitle) pillTitle.textContent = label;
   pillSub.textContent = state.running ? "live" : "ready";
   if (hintCommand) hintCommand.textContent = command;
+  if (hintShortcut && state.shortcutLabel) {
+    hintShortcut.textContent = state.shortcutLabel;
+  }
 
   if (Array.isArray(state.agents) && state.agents.length) {
     const current = agentSelect.value;

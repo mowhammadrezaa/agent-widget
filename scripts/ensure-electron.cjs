@@ -2,11 +2,16 @@
 /**
  * electron's extract-zip can leave an incomplete dist on some macOS setups.
  * Ensure Frameworks exist; if not, unzip from the electron cache or re-download.
+ * No-op on Windows/Linux — npm's electron install is sufficient there.
  */
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 const os = require("os");
+
+if (process.platform !== "darwin") {
+  process.exit(0);
+}
 
 const electronRoot = path.join(__dirname, "..", "node_modules", "electron");
 const dist = path.join(electronRoot, "dist");
@@ -46,7 +51,11 @@ if (fs.existsSync(cacheRoot)) {
 if (!zip) {
   // Trigger download into cache, then locate zip.
   try {
-    execSync("node install.js", { cwd: electronRoot, stdio: "inherit", env: { ...process.env, force_no_cache: "true" } });
+    execSync("node install.js", {
+      cwd: electronRoot,
+      stdio: "inherit",
+      env: { ...process.env, force_no_cache: "true" },
+    });
   } catch {
     // continue — may still be incomplete
   }
