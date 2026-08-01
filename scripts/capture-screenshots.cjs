@@ -140,6 +140,8 @@ app.whenReady().then(async () => {
       { id: "cursor", label: "Cursor", command: "agent", custom: false },
       { id: "claude", label: "Claude", command: "claude", custom: false },
     ],
+    tabs: [{ id: "tab-demo", agentId: "cursor", title: "Cursor", running: true }],
+    activeTabId: "tab-demo",
     running: true,
   };
 

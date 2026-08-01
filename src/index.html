@@ -38,9 +38,9 @@
             </div>
           </div>
           <div class="actions no-drag">
-            <label class="agent-picker" data-tip="Active agent">
+            <label class="agent-picker" data-tip="Open agent in a new tab">
               <span class="sr-only">Agent</span>
-              <select id="agent-select" aria-label="Choose agent">
+              <select id="agent-select" aria-label="Open agent in a new tab">
                 <option value="cursor">Cursor</option>
                 <option value="claude">Claude</option>
               </select>
@@ -71,6 +71,15 @@
             </button>
           </div>
         </header>
+        <div id="tab-bar" class="no-drag">
+          <div id="tab-list" role="tablist" aria-label="Agent tabs"></div>
+          <button id="btn-new-tab" type="button" data-tip="New tab" aria-label="New tab">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button id="btn-close-all-tabs" type="button" data-tip="Close all tabs" aria-label="Close all tabs">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5M3 8h10" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg>
+          </button>
+        </div>
         <div id="agent-add" class="no-drag" hidden>
           <input
             id="agent-command-input"

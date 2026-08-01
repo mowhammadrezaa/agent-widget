@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+  </head>
+  <body>
+    <div id="terminal" style="width: 800px; height: 400px; background: #111"></div>
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script>
+      const TAB = "tab-test";
+      const term = new Terminal({ convertEol: true });
+      term.open(document.getElementById("terminal"));
+      let painted = "";
+      window.widget.onData((payload) => {
+        const tabId = payload?.tabId;
+        const data = typeof payload?.data === "string" ? payload.data : "";
+        if (!data) return;
+        if (tabId && tabId !== TAB) return;
+        painted += data;
+        term.write(data);
+      });
+      term.onData((data) => window.widget.write(data, TAB));
+      window.__getPainted = () => painted;
+      window.__ready = true;
+    </script>
+  </body>
+</html>

@@ -12,6 +12,7 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 
 ## Features
 
+- **Tabs** — open multiple sessions per agent; tabs persist across restarts until you close them
 - **Pill → panel** — collapsed capsule; click to expand a full PTY terminal
 - **Real agents** — Cursor (`agent`), Claude (`claude`), plus custom commands
 - **Always on top** — optional floating mode with click-through around the pill
@@ -50,8 +51,10 @@ cd agent-widget
 | Collapse | Move the pointer away, press `Esc`, or the − control |
 | Quit | ✕ on the pill/panel, or tray **Quit** |
 | Toggle | `⌘⇧A` (while running) |
-| Switch agent | Dropdown in the panel header |
-| Add agent | ＋ then enter a command (e.g. `codex`) |
+| Switch agent | Dropdown opens that agent in a **new** tab (current tab stays) |
+| New tab | ＋ on the tab bar (uses the selected agent) |
+| Close tab | × on a tab, or **Close all** |
+| Add agent | ＋ next to the agent dropdown, then enter a command (e.g. `codex`) |
 
 ## Configuration
 
@@ -61,6 +64,10 @@ Stored at `~/.agent-widget.json`:
 | --- | --- |
 | `workspace` | Agent working directory |
 | `agentId` | Active agent (`cursor`, `claude`, or custom id) |
+| `tabs` | Open sessions `{ id, agentId }` — restored across restarts |
+| `activeTabId` | Selected tab |
+
+Tab scrollback is stored separately at `~/.agent-widget-buffers.json` so sessions survive quit/relaunch (the live PTY still starts fresh).
 | `alwaysOnTop` | Float above other windows |
 | `customAgents` | User-defined `{ id, label, command }` entries |
 

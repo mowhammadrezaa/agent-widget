@@ -14,6 +14,7 @@ const { execSync, spawnSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
+const BUFFER_PATH = path.join(os.homedir(), ".agent-widget-buffers.json");
 const LOG_OUT = path.join(os.homedir(), "Library", "Logs", "agent-widget.log");
 const LOG_ERR = path.join(os.homedir(), "Library", "Logs", "agent-widget.err.log");
 
@@ -322,6 +323,7 @@ async function wizard() {
     if (removeConfig) {
       if (rm(CONFIG_PATH)) ok(`Removed ${shortHome(CONFIG_PATH)}`);
       else skip("Config already gone");
+      if (rm(BUFFER_PATH)) ok(`Removed ${shortHome(BUFFER_PATH)}`);
     } else {
       skip("Kept config");
     }

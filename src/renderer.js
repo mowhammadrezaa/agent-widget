@@ -3,6 +3,9 @@ const pill = document.getElementById("pill");
 const pillQuit = document.getElementById("pill-quit");
 const panel = document.getElementById("panel");
 const termHost = document.getElementById("terminal");
+const tabList = document.getElementById("tab-list");
+const btnNewTab = document.getElementById("btn-new-tab");
+const btnCloseAllTabs = document.getElementById("btn-close-all-tabs");
 const workspaceLabel = document.getElementById("workspace-label");
 const brandTitle = document.getElementById("brand-title");
 const agentSelect = document.getElementById("agent-select");
@@ -23,6 +26,9 @@ const btnRestart = document.getElementById("btn-restart");
 const btnWorkspace = document.getElementById("btn-workspace");
 const pillSub = document.querySelector(".pill-sub");
 
+/** @type {Map<string, string>} scrollback retained in main, replayed on tab switch */
+// (renderer keeps one live xterm — multi-pane broke input/echo)
+
 let term = null;
 let fitAddon = null;
 let resizeObserver = null;
@@ -31,9 +37,9 @@ let alwaysOnTop = true;
 let openAtLogin = false;
 let expanded = false;
 let ignoreMouse = true;
-let disposedData = null;
-let disposedReset = null;
 let booted = false;
+let activeTabId = null;
+let ptyWired = false;
 
 function markBooted() {
   if (booted) return;
@@ -70,18 +76,13 @@ function fitTerminal() {
   if (!fitAddon || !term || !expanded) return;
   try {
     fitAddon.fit();
-    window.widget.resize(term.cols, term.rows);
+    window.widget.resize(term.cols, term.rows, activeTabId || undefined);
   } catch {
     // terminal not ready
   }
 }
 
 function destroyTerminal() {
-  disposedData?.();
-  disposedReset?.();
-  disposedData = null;
-  disposedReset = null;
-
   try {
     resizeObserver?.disconnect();
   } catch {
@@ -143,29 +144,93 @@ function createTerminal() {
   term.loadAddon(new WebLinksAddon());
   term.open(termHost);
 
-  term.onData((data) => window.widget.write(data));
+  // Always write to whatever tab is active now (not a stale closure).
+  term.onData((data) => window.widget.write(data, activeTabId || undefined));
 
-  disposedData = window.widget.onData((data) => {
-    term?.write(data);
-  });
-
-  disposedReset = window.widget.onReset(() => {
-    // Full terminal rebuild so restart never stacks cursors/listeners.
-    const wasFocused = expanded;
-    createTerminal();
-    if (wasFocused) {
-      fitTerminal();
-      term?.focus();
-    }
-  });
-
-  resizeObserver = new ResizeObserver(() => fitTerminal());
-  resizeObserver.observe(termHost);
+  if (!resizeObserver) {
+    resizeObserver = new ResizeObserver(() => fitTerminal());
+    resizeObserver.observe(termHost);
+  } else {
+    resizeObserver.observe(termHost);
+  }
 }
 
 function ensureTerminal() {
   if (term) return;
   createTerminal();
+}
+
+function wirePtyBridge() {
+  if (ptyWired) return;
+  ptyWired = true;
+
+  window.widget.onData((payload) => {
+    const tabId = payload?.tabId;
+    const data =
+      typeof payload === "string"
+        ? payload
+        : typeof payload?.data === "string"
+          ? payload.data
+          : "";
+    if (!data) return;
+    // Only paint output for the active tab (inactive tabs buffer in main).
+    if (tabId && activeTabId && tabId !== activeTabId) return;
+    if (!term) return;
+    term.write(data);
+  });
+
+  window.widget.onReset((payload) => {
+    if (payload?.tabId && activeTabId && payload.tabId !== activeTabId && !payload?.all) {
+      return;
+    }
+    const wasFocused = expanded;
+    createTerminal();
+    if (wasFocused) {
+      fitTerminal();
+      term?.focus();
+      if (activeTabId) window.widget.replayTab(activeTabId);
+    }
+  });
+}
+
+function renderTabs(tabs, selectedId) {
+  if (!tabList) return;
+  tabList.replaceChildren();
+  for (const tab of tabs) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.setAttribute("role", "tab");
+    btn.dataset.tabId = tab.id;
+    btn.setAttribute("aria-selected", tab.id === selectedId ? "true" : "false");
+    btn.title = tab.title;
+
+    const title = document.createElement("span");
+    title.className = "tab-title";
+    title.textContent = tab.title;
+
+    const close = document.createElement("span");
+    close.className = "tab-close";
+    close.setAttribute("role", "button");
+    close.setAttribute("aria-label", `Close ${tab.title}`);
+    close.textContent = "×";
+    close.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      holdCollapse();
+      window.widget.closeTab(tab.id);
+      releaseCollapseSoon(400);
+    });
+
+    btn.append(title, close);
+    btn.addEventListener("click", (e) => {
+      if (e.target === close || close.contains(e.target)) return;
+      holdCollapse();
+      window.widget.setTab(tab.id);
+      releaseCollapseSoon(400);
+    });
+    tabList.appendChild(btn);
+  }
 }
 
 function applyState(state) {
@@ -205,9 +270,41 @@ function applyState(state) {
 
   btnRemoveAgent.hidden = !state.agentCustom;
 
+  const tabs = Array.isArray(state.tabs) && state.tabs.length
+    ? state.tabs
+    : [{ id: "legacy", agentId: state.agentId || "cursor", title: label }];
+  const selected = state.activeTabId || tabs[0].id;
+  const tabChanged = activeTabId && selected && activeTabId !== selected;
+  activeTabId = selected;
+  renderTabs(tabs, selected);
+
   markBooted();
   setMode(Boolean(state.expanded));
-  if (state.expanded) ensureTerminal();
+
+  if (state.expanded) {
+    if (!term) {
+      ensureTerminal();
+      requestAnimationFrame(() => {
+        fitTerminal();
+        term?.focus();
+        if (selected) window.widget.replayTab(selected);
+      });
+    } else if (tabChanged) {
+      // Switching tabs: clear view, then ask main to replay that tab's buffer.
+      term.clear();
+      term.reset();
+      requestAnimationFrame(() => {
+        fitTerminal();
+        term?.focus();
+        window.widget.replayTab(selected);
+      });
+    } else {
+      requestAnimationFrame(() => {
+        fitTerminal();
+        term?.focus();
+      });
+    }
+  }
 }
 
 function expand() {
@@ -236,7 +333,13 @@ function collapseNow() {
   if (suppressCollapse || !expanded) return;
   if (!agentAdd.hidden) return;
   const active = document.activeElement;
-  if (active === agentSelect || active?.closest?.(".actions") || active?.closest?.("#chrome") || active?.closest?.("#agent-add")) {
+  if (
+    active === agentSelect ||
+    active?.closest?.(".actions") ||
+    active?.closest?.("#chrome") ||
+    active?.closest?.("#tab-bar") ||
+    active?.closest?.("#agent-add")
+  ) {
     return;
   }
   window.widget.collapse();
@@ -440,6 +543,20 @@ btnRemoveAgent.addEventListener("click", async (e) => {
   term?.focus();
 });
 
+btnNewTab.addEventListener("click", (e) => {
+  e.stopPropagation();
+  holdCollapse();
+  window.widget.newTab(agentSelect.value);
+  releaseCollapseSoon(400);
+});
+
+btnCloseAllTabs.addEventListener("click", (e) => {
+  e.stopPropagation();
+  holdCollapse();
+  window.widget.closeAllTabs();
+  releaseCollapseSoon(400);
+});
+
 btnAgentSave.addEventListener("click", (e) => {
   e.stopPropagation();
   saveAgentAdd();
@@ -474,9 +591,20 @@ agentLabelInput.addEventListener("keydown", (e) => {
   }
 });
 
-for (const el of [agentAdd, agentCommandInput, agentLabelInput, btnAddAgent, btnRemoveAgent, btnAgentSave, btnAgentCancel]) {
-  el.addEventListener("pointerdown", () => holdCollapse());
-  el.addEventListener("focus", () => holdCollapse(), true);
+for (const el of [
+  agentAdd,
+  agentCommandInput,
+  agentLabelInput,
+  btnAddAgent,
+  btnRemoveAgent,
+  btnAgentSave,
+  btnAgentCancel,
+  btnNewTab,
+  btnCloseAllTabs,
+  tabList,
+]) {
+  el?.addEventListener("pointerdown", () => holdCollapse());
+  el?.addEventListener("focus", () => holdCollapse(), true);
 }
 
 btnWorkspace.addEventListener("click", async () => {
@@ -502,5 +630,6 @@ window.addEventListener("keydown", (e) => {
 
 window.addEventListener("resize", () => fitTerminal());
 
+wirePtyBridge();
 window.widget.onState(applyState);
 window.widget.getState().then(applyState);

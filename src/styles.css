@@ -250,7 +250,7 @@ body {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   border-radius: var(--radius);
   overflow: visible;
   opacity: 0;
@@ -283,6 +283,115 @@ body {
 
 #agent-add:not([hidden]) {
   display: grid;
+}
+
+#tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--fog);
+  background: rgba(0, 0, 0, 0.14);
+  min-width: 0;
+}
+
+#tab-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  border-color: rgba(183, 243, 92, 0.35);
+  background: rgba(183, 243, 92, 0.12);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.tab-close:hover {
+  background: rgba(255, 122, 102, 0.18);
+  color: #ffb4a8;
+}
+
+#btn-new-tab,
+#btn-close-all-tabs {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  border-radius: 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+#btn-new-tab svg,
+#btn-close-all-tabs svg {
+  width: 13px;
+  height: 13px;
+}
+
+#btn-new-tab:hover,
+#btn-close-all-tabs:hover {
+  background: rgba(183, 243, 92, 0.1);
+  border-color: rgba(183, 243, 92, 0.28);
+  color: var(--text);
 }
 
 #agent-add input {

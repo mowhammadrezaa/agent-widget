@@ -24,6 +24,7 @@ const COLLAPSED = { width: 240, height: 128 };
 const PILL = { width: 228, height: 64 };
 const MARGIN = 24;
 const CONFIG_PATH = path.join(os.homedir(), ".agent-widget.json");
+const BUFFER_PATH = path.join(os.homedir(), ".agent-widget-buffers.json");
 
 const BUILTIN_AGENTS = {
   cursor: {
@@ -59,19 +60,67 @@ const BUILTIN_AGENTS = {
 
 let win = null;
 let tray = null;
-let ptyProcess = null;
-let ptyDataDisposable = null;
-let ptyExitDisposable = null;
+/** @type {Map<string, { process: import("node-pty").IPty, dataDisposable: any, exitDisposable: any }>} */
+const ptys = new Map();
+/** Soft scrollback per tab so switching tabs can replay output. */
+const ptyBuffers = new Map();
+const PTY_BUFFER_MAX = 200_000;
 let expanded = false;
 let alwaysOnTop = true;
 let workspace = process.env.HOME || os.homedir();
 let agentId = "cursor";
 let customAgents = [];
+/** @type {{ id: string, agentId: string }[]} */
+let tabs = [];
+let activeTabId = null;
 /** Stable pill screen rect — survives expand clamp so collapse doesn't jump. */
 let savedPillScreen = null;
 /** Cached PATH / agent binaries — avoid sync `zsh -lc` (loads full shell, freezes UI). */
 let cachedEnvPath = null;
 const agentPathCache = new Map();
+
+function newTabId() {
+  return `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function syncAgentIdFromActiveTab() {
+  const tab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  agentId = tab?.agentId || "cursor";
+  if (tab) activeTabId = tab.id;
+}
+
+function ensureDefaultTabs() {
+  if (!tabs.length) {
+    const id = newTabId();
+    tabs = [{ id, agentId: findAgent(agentId) ? agentId : "cursor" }];
+    activeTabId = id;
+  }
+  if (!tabs.some((t) => t.id === activeTabId)) {
+    activeTabId = tabs[0].id;
+  }
+  syncAgentIdFromActiveTab();
+}
+
+function tabTitle(tab) {
+  const agent = getAgent(tab.agentId);
+  const same = tabs.filter((t) => t.agentId === tab.agentId);
+  if (same.length <= 1) return agent.label;
+  const n = same.findIndex((t) => t.id === tab.id) + 1;
+  return `${agent.label} ${n}`;
+}
+
+function listTabs() {
+  return tabs.map((t) => ({
+    id: t.id,
+    agentId: t.agentId,
+    title: tabTitle(t),
+    running: Boolean(ptys.get(t.id)?.process),
+  }));
+}
+
+function activeTab() {
+  return tabs.find((t) => t.id === activeTabId) || tabs[0] || null;
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -133,13 +182,29 @@ function loadConfig() {
     if (typeof raw.alwaysOnTop === "boolean") {
       alwaysOnTop = raw.alwaysOnTop;
     }
+    if (Array.isArray(raw.tabs) && raw.tabs.length) {
+      tabs = raw.tabs
+        .filter((t) => t && t.id)
+        .map((t) => ({
+          id: String(t.id),
+          agentId: findAgent(t.agentId) ? String(t.agentId) : "cursor",
+        }));
+      if (raw.activeTabId && tabs.some((t) => t.id === raw.activeTabId)) {
+        activeTabId = String(raw.activeTabId);
+      } else {
+        activeTabId = tabs[0]?.id || null;
+      }
+    }
   } catch {
     // first run
   }
+  ensureDefaultTabs();
+  loadBuffers();
 }
 
 function saveConfig() {
   try {
+    syncAgentIdFromActiveTab();
     fs.writeFileSync(
       CONFIG_PATH,
       JSON.stringify(
@@ -147,6 +212,11 @@ function saveConfig() {
           workspace,
           agentId,
           alwaysOnTop,
+          activeTabId,
+          tabs: tabs.map((t) => ({
+            id: t.id,
+            agentId: t.agentId,
+          })),
           customAgents: customAgents.map((a) => ({
             id: a.id,
             label: a.label,
@@ -158,6 +228,49 @@ function saveConfig() {
       ) + "\n",
       "utf8",
     );
+  } catch {
+    // ignore
+  }
+}
+
+function loadBuffers() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(BUFFER_PATH, "utf8"));
+    if (!raw || typeof raw !== "object") return;
+    const keep = new Set(tabs.map((t) => t.id));
+    for (const [id, text] of Object.entries(raw)) {
+      if (!keep.has(id) || typeof text !== "string" || !text) continue;
+      ptyBuffers.set(
+        id,
+        text.length > PTY_BUFFER_MAX ? text.slice(text.length - PTY_BUFFER_MAX) : text,
+      );
+    }
+  } catch {
+    // no buffers yet
+  }
+}
+
+let bufferSaveTimer = null;
+
+function saveBuffersSoon() {
+  clearTimeout(bufferSaveTimer);
+  bufferSaveTimer = setTimeout(() => {
+    bufferSaveTimer = null;
+    saveBuffersNow();
+  }, 750);
+}
+
+function saveBuffersNow() {
+  clearTimeout(bufferSaveTimer);
+  bufferSaveTimer = null;
+  try {
+    const keep = new Set(tabs.map((t) => t.id));
+    const out = {};
+    for (const [id, text] of ptyBuffers) {
+      if (!keep.has(id) || !text) continue;
+      out[id] = text;
+    }
+    fs.writeFileSync(BUFFER_PATH, JSON.stringify(out) + "\n", "utf8");
   } catch {
     // ignore
   }
@@ -236,15 +349,18 @@ function resolveAgentPath(id = agentId) {
 }
 
 function setAgentId(nextId) {
-  if (!findAgent(nextId) || nextId === agentId) {
+  if (!findAgent(nextId)) {
     sendState();
     return;
   }
-  agentId = nextId;
-  saveConfig();
-  clearAgentPathCache();
-  restartPty();
-  sendState();
+  const active = activeTab();
+  // Same agent as the current tab — nothing to do.
+  if (active?.agentId === nextId) {
+    sendState();
+    return;
+  }
+  // Switching agent opens a new tab; keep the current session intact.
+  createTab(nextId);
 }
 
 function addCustomAgent({ command, label } = {}) {
@@ -262,26 +378,121 @@ function addCustomAgent({ command, label } = {}) {
     installHint: `Could not run \`${cmd}\`. Check the command and click Restart.`,
   };
   customAgents.push(entry);
-  agentId = id;
+  // Open a new tab for the new agent so existing sessions stay put.
+  const tabId = newTabId();
+  tabs.push({ id: tabId, agentId: id });
+  activeTabId = tabId;
+  syncAgentIdFromActiveTab();
   saveConfig();
   clearAgentPathCache();
-  restartPty();
+  if (expanded) {
+    setImmediate(() => ensurePty(tabId));
+  }
   sendState();
-  return { ok: true, id };
+  return { ok: true, id, tabId };
 }
 
 function removeCustomAgent(id) {
   const idx = customAgents.findIndex((a) => a.id === id);
   if (idx < 0) return { ok: false, error: "Not a custom agent" };
   customAgents.splice(idx, 1);
-  if (agentId === id) {
-    agentId = "cursor";
+  // Keep tabs; retarget any that used the removed agent.
+  for (const tab of tabs) {
+    if (tab.agentId === id) {
+      tab.agentId = "cursor";
+      restartPty(tab.id);
+    }
   }
+  syncAgentIdFromActiveTab();
   saveConfig();
   clearAgentPathCache();
-  restartPty();
   sendState();
   return { ok: true };
+}
+
+function createTab(preferredAgentId) {
+  ensureDefaultTabs();
+  const aid =
+    (preferredAgentId && findAgent(preferredAgentId) && preferredAgentId) ||
+    activeTab()?.agentId ||
+    "cursor";
+  const id = newTabId();
+  tabs.push({ id, agentId: aid });
+  activeTabId = id;
+  syncAgentIdFromActiveTab();
+  saveConfig();
+  if (expanded) {
+    setImmediate(() => ensurePty(id));
+  }
+  sendState();
+  return { ok: true, id };
+}
+
+function setActiveTab(id) {
+  if (!tabs.some((t) => t.id === id)) {
+    return { ok: false, error: "Unknown tab" };
+  }
+  if (activeTabId === id) {
+    sendState();
+    return { ok: true, id };
+  }
+  activeTabId = id;
+  syncAgentIdFromActiveTab();
+  saveConfig();
+  if (expanded) {
+    setImmediate(() => ensurePty(id));
+  }
+  sendState();
+  return { ok: true, id };
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex((t) => t.id === id);
+  if (idx < 0) return { ok: false, error: "Unknown tab" };
+
+  killPty(id);
+  clearPtyBuffer(id);
+  tabs.splice(idx, 1);
+
+  if (!tabs.length) {
+    const fresh = newTabId();
+    const aid = findAgent(agentId) ? agentId : "cursor";
+    tabs = [{ id: fresh, agentId: aid }];
+    activeTabId = fresh;
+  } else if (activeTabId === id) {
+    activeTabId = tabs[Math.min(idx, tabs.length - 1)].id;
+  }
+
+  syncAgentIdFromActiveTab();
+  saveConfig();
+  win?.webContents.send("pty:reset", { tabId: id });
+  sendState();
+  if (expanded) {
+    setImmediate(() => {
+      ensurePty(activeTabId);
+      replayPtyBuffer(activeTabId);
+    });
+  }
+  return { ok: true };
+}
+
+function closeAllTabs() {
+  const aid = activeTab()?.agentId || (findAgent(agentId) ? agentId : "cursor");
+  for (const tab of [...tabs]) {
+    killPty(tab.id);
+    clearPtyBuffer(tab.id);
+  }
+  const id = newTabId();
+  tabs = [{ id, agentId: aid }];
+  activeTabId = id;
+  syncAgentIdFromActiveTab();
+  saveConfig();
+  win?.webContents.send("pty:reset", { all: true });
+  sendState();
+  if (expanded) {
+    setImmediate(() => ensurePty(id));
+  }
+  return { ok: true, id };
 }
 
 function currentSize() {
@@ -486,7 +697,7 @@ function createWindow() {
   });
 
   win.on("closed", () => {
-    killPty();
+    killAllPtys();
     win = null;
   });
 
@@ -535,7 +746,9 @@ function setAlwaysOnTopEnabled(next) {
 
 function sendState() {
   if (!win || win.isDestroyed()) return;
+  syncAgentIdFromActiveTab();
   const spec = currentAgent();
+  const activePty = activeTabId ? ptys.get(activeTabId) : null;
   win.webContents.send("widget:state", {
     expanded,
     alwaysOnTop,
@@ -545,9 +758,11 @@ function sendState() {
     agentLabel: spec.label,
     agentCommand: spec.command,
     agentCustom: Boolean(spec.custom),
-    agentPath: resolveAgentPath(),
+    agentPath: resolveAgentPath(agentId),
     agents: listAgents(),
-    running: Boolean(ptyProcess),
+    tabs: listTabs(),
+    activeTabId,
+    running: Boolean(activePty?.process),
   });
 }
 
@@ -581,8 +796,12 @@ function setExpanded(next) {
     win.setBackgroundColor("#00000000");
     applyMousePassthrough();
     sendState();
-    ensurePty();
     win.focus();
+    // Spawn after the panel is on screen — pty.spawn is sync and freezes expand.
+    setImmediate(() => {
+      if (!expanded || !win || win.isDestroyed()) return;
+      ensurePty(activeTabId);
+    });
   } else {
     // Always restore the pre-expand pill spot (not the panel center).
     const target = clampPillScreen(savedPillScreen || readCollapsedPillScreen());
@@ -595,38 +814,75 @@ function setExpanded(next) {
   }
 }
 
-function disposePtyListeners() {
-  try {
-    ptyDataDisposable?.dispose?.();
-  } catch {
-    // ignore
-  }
-  try {
-    ptyExitDisposable?.dispose?.();
-  } catch {
-    // ignore
-  }
-  ptyDataDisposable = null;
-  ptyExitDisposable = null;
+function appendPtyBuffer(tabId, text) {
+  if (!tabId || !text) return;
+  const prev = ptyBuffers.get(tabId) || "";
+  const next = prev + text;
+  ptyBuffers.set(
+    tabId,
+    next.length > PTY_BUFFER_MAX ? next.slice(next.length - PTY_BUFFER_MAX) : next,
+  );
+  saveBuffersSoon();
 }
 
-function killPty() {
-  const proc = ptyProcess;
-  ptyProcess = null;
-  disposePtyListeners();
-  if (!proc) return;
+function clearPtyBuffer(tabId) {
+  if (tabId) ptyBuffers.delete(tabId);
+  saveBuffersSoon();
+}
+
+function sendPtyData(tabId, text) {
+  if (!tabId || text == null || text === "") return;
+  appendPtyBuffer(tabId, text);
+  win?.webContents.send("pty:data", { tabId, data: String(text) });
+}
+
+function replayPtyBuffer(tabId) {
+  if (!tabId || !win || win.isDestroyed()) return;
+  const buf = ptyBuffers.get(tabId);
+  if (!buf) return;
+  win.webContents.send("pty:data", { tabId, data: buf });
+}
+
+function disposePtyEntry(entry) {
+  if (!entry) return;
   try {
-    proc.kill();
+    entry.dataDisposable?.dispose?.();
+  } catch {
+    // ignore
+  }
+  try {
+    entry.exitDisposable?.dispose?.();
+  } catch {
+    // ignore
+  }
+}
+
+function killPty(tabId) {
+  const entry = ptys.get(tabId);
+  if (!entry) return;
+  ptys.delete(tabId);
+  disposePtyEntry(entry);
+  try {
+    entry.process?.kill();
   } catch {
     // already dead
   }
 }
 
-function ensurePty() {
-  if (ptyProcess) return;
+function killAllPtys() {
+  for (const id of [...ptys.keys()]) {
+    killPty(id);
+  }
+}
 
-  const spec = currentAgent();
-  const agentPath = resolveAgentPath();
+function ensurePty(tabId = activeTabId) {
+  if (!tabId) return;
+  const tab = tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+  if (ptys.get(tabId)?.process) return;
+
+  const spec = getAgent(tab.agentId);
+  const agentPath = resolveAgentPath(tab.agentId);
   const cols = 100;
   const rows = 32;
 
@@ -663,8 +919,8 @@ function ensurePty() {
       });
     }
   } catch (err) {
-    win?.webContents.send(
-      "pty:data",
+    sendPtyData(
+      tabId,
       `\r\n\x1b[31mFailed to start ${spec.label}:\x1b[0m ${err.message}\r\n` +
         `Looked for: ${spec.custom ? spec.command : agentPath}\r\n` +
         `${spec.installHint || "Check the command and click Restart."}\r\n`,
@@ -672,19 +928,25 @@ function ensurePty() {
     return;
   }
 
-  ptyProcess = spawned;
+  const entry = {
+    process: spawned,
+    dataDisposable: null,
+    exitDisposable: null,
+  };
+  ptys.set(tabId, entry);
 
-  ptyDataDisposable = spawned.onData((data) => {
-    if (ptyProcess !== spawned) return;
-    win?.webContents.send("pty:data", data);
+  entry.dataDisposable = spawned.onData((data) => {
+    if (ptys.get(tabId)?.process !== spawned) return;
+    const text = Buffer.isBuffer(data) ? data.toString("utf8") : String(data);
+    sendPtyData(tabId, text);
   });
 
-  ptyExitDisposable = spawned.onExit(({ exitCode }) => {
-    if (ptyProcess !== spawned) return;
-    ptyProcess = null;
-    disposePtyListeners();
-    win?.webContents.send(
-      "pty:data",
+  entry.exitDisposable = spawned.onExit(({ exitCode }) => {
+    if (ptys.get(tabId)?.process !== spawned) return;
+    ptys.delete(tabId);
+    disposePtyEntry(entry);
+    sendPtyData(
+      tabId,
       `\r\n\x1b[90m${spec.command} exited (${exitCode ?? "?"}). Click Restart or expand again.\x1b[0m\r\n`,
     );
     sendState();
@@ -693,26 +955,34 @@ function ensurePty() {
   sendState();
 }
 
-function writePty(data) {
-  if (!ptyProcess) ensurePty();
-  ptyProcess?.write(data);
-}
-
-function resizePty(cols, rows) {
-  if (!ptyProcess) return;
+function writePty(data, tabId = activeTabId) {
+  if (!tabId) return;
+  if (!ptys.get(tabId)?.process) ensurePty(tabId);
   try {
-    ptyProcess.resize(Math.max(20, cols), Math.max(5, rows));
+    ptys.get(tabId)?.process?.write(data);
   } catch {
     // ignore
   }
 }
 
-function restartPty() {
-  killPty();
-  if (win && !win.isDestroyed()) {
-    win.webContents.send("pty:reset");
+function resizePty(cols, rows, tabId = activeTabId) {
+  const proc = tabId ? ptys.get(tabId)?.process : null;
+  if (!proc) return;
+  try {
+    proc.resize(Math.max(20, cols), Math.max(5, rows));
+  } catch {
+    // ignore
   }
-  ensurePty();
+}
+
+function restartPty(tabId = activeTabId) {
+  if (!tabId) return;
+  killPty(tabId);
+  clearPtyBuffer(tabId);
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("pty:reset", { tabId });
+  }
+  if (expanded) ensurePty(tabId);
 }
 
 function rebuildTrayMenu() {
@@ -805,6 +1075,15 @@ function registerIpc() {
       },
       { type: "separator" },
       {
+        label: "New Tab",
+        click: () => createTab(),
+      },
+      {
+        label: "Close All Tabs",
+        click: () => closeAllTabs(),
+      },
+      { type: "separator" },
+      {
         label: "Quit Agent Widget",
         click: () => {
           app.isQuitting = true;
@@ -840,8 +1119,23 @@ function registerIpc() {
   ipcMain.on("widget:set-agent", (_e, nextId) => setAgentId(String(nextId || "")));
   ipcMain.handle("widget:add-agent", (_e, payload) => addCustomAgent(payload || {}));
   ipcMain.handle("widget:remove-agent", (_e, id) => removeCustomAgent(String(id || "")));
+  ipcMain.handle("widget:new-tab", (_e, agentIdArg) =>
+    createTab(agentIdArg ? String(agentIdArg) : undefined),
+  );
+  ipcMain.handle("widget:set-tab", (_e, id) => setActiveTab(String(id || "")));
+  ipcMain.handle("widget:close-tab", (_e, id) => closeTab(String(id || "")));
+  ipcMain.handle("widget:close-all-tabs", () => closeAllTabs());
+  ipcMain.handle("widget:replay-tab", (_e, id) => {
+    const tabId = String(id || activeTabId || "");
+    if (!tabId) return { ok: false };
+    ensurePty(tabId);
+    replayPtyBuffer(tabId);
+    return { ok: true };
+  });
   ipcMain.handle("widget:get-state", () => {
+    syncAgentIdFromActiveTab();
     const spec = currentAgent();
+    const activePty = activeTabId ? ptys.get(activeTabId) : null;
     return {
       expanded,
       alwaysOnTop,
@@ -851,13 +1145,23 @@ function registerIpc() {
       agentLabel: spec.label,
       agentCommand: spec.command,
       agentCustom: Boolean(spec.custom),
-      agentPath: resolveAgentPath(),
+      agentPath: resolveAgentPath(agentId),
       agents: listAgents(),
-      running: Boolean(ptyProcess),
+      tabs: listTabs(),
+      activeTabId,
+      running: Boolean(activePty?.process),
     };
   });
-  ipcMain.on("pty:input", (_e, data) => writePty(data));
-  ipcMain.on("pty:resize", (_e, { cols, rows }) => resizePty(cols, rows));
+  ipcMain.on("pty:input", (_e, payload) => {
+    if (payload && typeof payload === "object" && "data" in payload) {
+      writePty(payload.data, payload.tabId || activeTabId);
+    } else {
+      writePty(payload);
+    }
+  });
+  ipcMain.on("pty:resize", (_e, { cols, rows, tabId }) =>
+    resizePty(cols, rows, tabId || activeTabId),
+  );
   ipcMain.handle("widget:pick-workspace", async () => {
     const { dialog } = require("electron");
     const result = await dialog.showOpenDialog(win, {
@@ -867,7 +1171,9 @@ function registerIpc() {
     if (!result.canceled && result.filePaths[0]) {
       workspace = result.filePaths[0];
       saveConfig();
-      restartPty();
+      for (const tab of tabs) {
+        restartPty(tab.id);
+      }
       sendState();
     }
     return workspace;
@@ -899,11 +1205,13 @@ if (gotLock) {
 
   app.on("before-quit", () => {
     app.isQuitting = true;
+    saveBuffersNow();
   });
 
   app.on("will-quit", () => {
+    saveBuffersNow();
     globalShortcut.unregisterAll();
-    killPty();
+    killAllPtys();
   });
 
   app.on("window-all-closed", () => {
