@@ -190,7 +190,11 @@ function applyState(state) {
     for (const agent of state.agents) {
       const opt = document.createElement("option");
       opt.value = agent.id;
-      opt.textContent = agent.custom ? `${agent.label} (${agent.command})` : agent.label;
+      const showCommand =
+        agent.custom && agent.command && agent.label !== agent.command;
+      opt.textContent = showCommand
+        ? `${agent.label} (${agent.command})`
+        : agent.label;
       opt.title = agent.command;
       agentSelect.appendChild(opt);
     }
