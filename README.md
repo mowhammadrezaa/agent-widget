@@ -32,10 +32,11 @@ Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expand
 
 Grab the latest **Agent Widget.dmg** from [Releases](https://github.com/mowhammadrezaa/agent-widget/releases) (built automatically on every push to `master`, or run `npm run dist` locally).
 
-1. Open the DMG and drag **Agent Widget** into Applications
-2. Launch it from Applications / Spotlight (`Agent Widget`)
+1. Open the DMG and drag **Agent Widget** into **Applications**
+2. In Finder → Applications, **Control-click** Agent Widget → **Open** → **Open**  
+   (or double-click once to get blocked, then **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**)
 
-The DMG is unsigned. Add your Gatekeeper / “Open anyway” steps here.
+Builds are **ad-hoc signed** (not Apple Developer ID / notarized). Gatekeeper will warn on first launch; that is expected.
 
 You still need a Cursor (`agent`) or Claude (`claude`) CLI installed for the widget to talk to an agent.
 

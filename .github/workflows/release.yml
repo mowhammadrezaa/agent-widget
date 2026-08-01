@@ -31,9 +31,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build unsigned DMG
+      - name: Build ad-hoc signed DMG
         run: npm run dist
         env:
+          # Use package.json mac.identity "-" (ad-hoc); do not pick a machine cert.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Resolve release metadata
