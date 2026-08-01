@@ -3,7 +3,7 @@
 Floating macOS desktop widget for AI agent CLIs — a collapsed pill that expands into a real terminal running Cursor’s `agent`, Claude Code, or any custom command.
 
 <p align="center">
-  <img src="docs/screenshots/pill.png" alt="Collapsed Agent Widget pill" width="320" />
+  <img src="docs/screenshots/pill.png" alt="Collapsed Agent Widget pill" width="240" />
 </p>
 
 <p align="center">
